@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>FF Optimizer</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="manifest" href="site.webmanifest">
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css">
+    <style>
+        .noselect {
+            -webkit-touch-callout: none;
+            /* iOS Safari */
+            -webkit-user-select: none;
+            /* Safari */
+            -khtml-user-select: none;
+            /* Konqueror HTML */
+            -moz-user-select: none;
+            /* Old versions of Firefox */
+            -ms-user-select: none;
+            /* Internet Explorer/Edge */
+            user-select: none;
+            /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <section class="section">
+            <div class="container">
+                <div class="level is-mobile">
+                    <div class="level-left noselect">
+                        <div class="level-item">
+                            <h1 class="title"><img src="favicon-32x32.png">FF<br>Optimizer</h1>
+                        </div>
+                    </div>
+                    <div class="level-right noselect">
+                        <p>
+                            <a class="level-item button is-black has-text-weight-bold" href="https://paypal.me/ReidandKat">Donate</a>
+                        </p>
+                    </div>
+                </div>
+                <div class="level is-mobile">
+                    <div class="level-left noselect">
+                        <p class="level-item subtitle">Week {{week}}</p>
+                    </div>
+                    <div class="level-right noselect">
+                        <p class="level-item subtitle is-7">Last updated: {{lastUpdatedAt}}</p>
+                    </div>
+                </div>
+                <hr>
+                <div class="box">
+                    <div class="columns is-mobile noselect is-centered">
+                        <div class="column">
+                            <div class="field" style="margin:auto;width:85px;">
+                                <label class="label">Scoring</label>
+                                <div class="control">
+                                    <input type="radio" name="scoring" id="STD" class="radio" v-model="scoring" value="STD" checked v-on:click="refresh">
+                                    <label class="radio is-size-7" for="STD">Standard</label>
+                                    <br>
+                                    <input type="radio" name="scoring" id="HALF" class="radio" v-model="scoring" value="HALF" v-on:click="refresh">
+                                    <label class="radio is-size-7" for="HALF">Half PPR</label>
+                                    <br>
+                                    <input type="radio" name="scoring" id="PPR" class="radio" v-model="scoring" value="PPR" v-on:click="refresh">
+                                    <label class="radio is-size-7" for="PPR">PPR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field" style="margin:auto;width:85px;">
+                                <label class="label">Flex</label>
+                                <div class="control">
+                                    <input type="radio" name="flex" id="WRT" class="radio" v-model="flex" value="WRT" checked v-on:click="refresh">
+                                    <label class="radio is-size-7" for="WRT">RB/WR/TE</label>
+                                    <br>
+                                    <input type="radio" name="flex" id="WR" class="radio" v-model="flex" value="WR" v-on:click="refresh">
+                                    <label class="radio is-size-7" for="WR">RB/WR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field" style="margin:auto;width:85px;">
+                                <label class="label">Platform</label>
+                                <div class="control">
+                                    <input type="radio" name="platform" id="Sleeper" class="radio" v-model="platform" value="Sleeper" v-on:click="refresh">
+                                    <label class="radio is-size-7" for="Sleeper">Sleeper</label>
+                                    <br>
+                                    <input type="radio" name="platform" id="ESPN" class="radio" v-model="platform" value="ESPN" v-on:click="refresh">
+                                    <label class="radio is-size-7" for="ESPN">ESPN</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="box" v-if="platform">
+                    <div class="field has-addons" v-if="platform == 'Sleeper'">
+                        <div class="control is-expanded">
+                            <input type="text" id="sleeperLeagueId" class="input is-fullwidth" v-model="sleeperLeagueId" v-on:keyup.enter="refresh" v-on:keyup="clear" placeholder="League ID">
+                        </div>
+                        <div class="control">
+                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
+                        </div>
+                    </div>
+                    <div class="field has-addons" v-if="platform == 'ESPN'">
+                        <div class="control is-expanded">
+                            <input type="text" id="espnLeagueId" class="input is-fullwidth" v-model="espnLeagueId" v-on:keyup.enter="refresh" v-on:keyup="clear" placeholder="League ID">
+                        </div>
+                        <div class="control">
+                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="box" v-if="owners.length > 0">
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <div class="select is-fullwidth">
+                                <select id="ownerId" v-on:change="getData" v-model="ownerId">
+                                    <option v-for="owner in owners" v-bind:value="owner.id">{{owner.owner}}</option>
+                                </select> </div>
+                        </div>
+                        <div class="control">
+                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#8634;</div>
+                        </div>
+                    </div>
+                </div>
+                <div v-if="ready">
+                    <hr>
+                    <div class="columns is-multiline" v-if="lineupReady">
+                        <div class="column is-narrow">
+                            <div class="box" style="min-width: 100px;">
+                                <h1 class="title">Lineup</h1>
+                                <table>
+                                    <tr v-for="position in startPos" v-bind:style="{backgroundColor: position.backgroundColor}">
+                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;">{{position.position}}</td>
+                                        <td style="padding: 0 5px 0 5px;">{{position.name}}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="column is-narrow" v-for="positionData in data">
+                            <div class="box" style="min-width: 100px;">
+                                <h1 class="title">{{positionData.position}}</h1>
+                                <table>
+                                    <tr v-for="player in positionData.players">
+                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;" v-if="positionData.position == 'FLX'">{{player.flxRank}}</td>
+                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;" v-if="positionData.position != 'FLX'">{{player.rank}}</td>
+                                        <td style="padding: 0 5px 0 5px;">{{ player.name }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div v-if="loading" style="width: 200%;height: 200%;background-color: rgb(0,0,0,.75);position: absolute;padding: 0;margin: 0;top:0;left:0;"></div>
+        <div v-if="loading" style="width: 100%;height: 100%;position: absolute;padding: 0;margin: 0;top:0;left:0;">
+            <div style="width: 100%;height: 100%;position: relative;">
+                <h1 class="title has-text-white noselect" style="margin: 0;position: absolute;top:50%;left:50%;-ms-transform: translate(-50%, -50%);transform: translate(-50%, -50%);opacity: 100%;">Loading...</h1>
+            </div>
+        </div>
+    </div>
+    <script>
+        var app = new Vue({
+            el: '#app',
+            data() {
+                return {
+                    platform: '',
+                    data: {},
+                    sleeperLeagueId: '605502403252391936',
+                    espnLeagueId: '899049',
+                    startPos: [],
+                    rosterStartPositions: [],
+                    ownerId: 0,
+                    ready: false,
+                    lineupReady: false,
+                    loading: false,
+                    players: [],
+                    owners: [],
+                    scoring: 'STD',
+                    flex: 'WRT',
+                    lastPlatform: '',
+                    lastUpdatedAt: '',
+                    week: ''
+                }
+            },
+            async mounted() {
+                axios.get('lastUpdatedAt.json').then(r => {
+                    this.lastUpdatedAt = r.data.date;
+                    this.week = r.data.week;
+                });
+            },
+            methods: {
+                addPlayer: function (sportradar_id, name, position, roster_id, starter, rank, setRank) {
+                    let obj = {
+                        id: sportradar_id,
+                        name: name.replaceAll('.', ''),
+                        position: position,
+                        onRoster: roster_id,
+                        starter: starter,
+                        rank: -1,
+                        flxRank: -1
+                    }
+                    obj[setRank] = rank;
+                    this.players.push(obj);
+                },
+                clear: function () {
+                    this.lineupReady = false;
+                    this.ready = false;
+                    this.players = [];
+                    this.startPos = [];
+                    this.data = {};
+                    this.owners = [];
+                },
+                clearPlayers: function () {
+                    this.players = [];
+                    this.startPos = [];
+                    this.data = {};
+                },
+                refresh: async function (event) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    this.loading = true;
+                    this.clear();
+                    if (this.lastPlatform != this.platform)
+                        this.ownerId = 0;
+                    this.lastPlatform = this.platform;
+                    if (this.platform == 'Sleeper')
+                        await this.getSleeperData();
+                    if (this.platform == 'ESPN')
+                        await this.getEspnData();
+                    if (this.ownerId != 0) await this.getData();
+                    this.loading = false;
+                },
+                getSleeperData: async function () {
+                    if (this.sleeperLeagueId.length != 18) return;
+                    this.ready = false;
+                    this.lineupReady = false;
+                    this.clearPlayers();
+                    let rosters = await this.getSleeperRosters(this.sleeperLeagueId);
+                    let players = await this.getSleeperPlayers();
+                    let positionTranslations = {
+                        QB: 'QB',
+                        RB: 'RB',
+                        WR: 'WR',
+                        TE: 'TE',
+                        FLEX: 'FLX',
+                        K: 'K',
+                        DEF: 'DST',
+                    }
+
+                    //get starters
+                    let onRosters = {};
+                    let onStarters = {};
+                    for (let roster of rosters.data) {
+                        for (let player of roster.players)
+                            onRosters[player] = roster.roster_id;
+                        for (let player of roster.starters)
+                            onStarters[player] = roster.roster_id;
+                    }
+                    for (let player of Object.keys(players.data)) {
+                        let onRoster = 0;
+                        if (player in onRosters)
+                            onRoster = onRosters[player];
+                        else continue;
+                        let starter = false;
+                        if (player in onStarters)
+                            starter = true;
+                        let id = players.data[player].id;
+                        let name = players.data[player].name;
+                        let position = positionTranslations[players.data[player].position];
+                        let rank = -1;
+                        let setRank = position == 'FLX' ? 'flxRank' : 'rank';
+                        this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
+                    }
+
+                    //get roster positions
+                    let leagueData = await this.getSleeperLeague(this.sleeperLeagueId);
+                    this.rosterStartPositions = [];
+                    for (let position of leagueData.data.roster_positions)
+                        if (position != "BN")
+                            this.rosterStartPositions.push(positionTranslations[position]);
+
+                    await this.getFPRanks();
+
+                    //get list of owner names for dropdown
+                    let owners = [];
+                    for (let roster of rosters.data) {
+                        let user = await this.getSleeperUser(roster.owner_id);
+                        owners.push({
+                            id: roster.roster_id,
+                            owner: user.data.display_name
+                        });
+                    }
+                    this.owners = owners;
+                },
+                getSleeperLeague: async function (leagueId) {
+                    return await axios.get('https://api.sleeper.app/v1/league/' + leagueId);
+                },
+                getSleeperUser: async function (userID) {
+                    return await axios.get('https://api.sleeper.app/v1/user/' + userID);
+                },
+                getSleeperRosters: async function (leagueId) {
+                    return await axios.get('https://api.sleeper.app/v1/league/' + leagueId + '/rosters');
+                },
+                getSleeperPlayers: async function () {
+                    return await axios.get('sleeperPlayers.json');
+                },
+                getData: async function () {
+                    this.ready = false;
+                    this.lineupReady = false;
+                    this.loading = true;
+                    await new Promise(resolve => setTimeout(resolve, 50));
+
+                    //get individual position rankings
+                    for (let position of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
+                        let getPos = [position];
+                        let getRank = 'rank';
+                        if (position == 'FLX') {
+                            if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
+                            if (this.flex == 'WR') getPos = ['RB', 'WR'];
+                            getRank = 'flxRank';
+                        }
+                        this.data[position] = {}
+                        this.data[position].position = position;
+                        this.data[position].players = this.players.filter(player => getPos.indexOf(player.position) >= 0 && player[getRank] > -1 && (player.onRoster == this.ownerId || player.onRoster == 0)).sort((a, b) => (a[getRank] - b[getRank])).slice(0, 10);
+                    }
+
+                    //clear old players
+                    this.startPos = [];
+
+                    //show blue for players you should play
+                    let starters = [];
+                    for (let position of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
+                        let slots = this.rosterStartPositions.filter(pos => pos == position).length;
+                        for (let i = 0; i < slots; i++) {
+                            let getPos = [position];
+                            let getRank = 'rank';
+                            if (position == 'FLX') {
+                                if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
+                                if (this.flex == 'WR') getPos = ['RB', 'WR'];
+                                getRank = 'flxRank';
+                            }
+                            for (let player of this.players.filter(player => getPos.indexOf(player.position) >= 0 && player[getRank] > -1 && (player.onRoster == this.ownerId || player.onRoster == 0)).sort((a, b) => (a[getRank] - b[getRank]))) {
+                                if (starters.indexOf(player.name) < 0) {
+                                    starters.push(player.name);
+                                    this.startPos.push({
+                                        name: player.name,
+                                        position: position,
+                                        backgroundColor: player.starter ? 'transparent' : 'lightblue'
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    //show red for players you should bench
+                    let currentStarters = this.players.filter(player => player.starter && player.onRoster == this.ownerId);
+                    for (let player of currentStarters) {
+                        if (this.startPos.filter(p => p.name == player.name).length == 0)
+                            this.startPos.push({
+                                position: 'BN',
+                                name: player.name,
+                                backgroundColor: 'palevioletred'
+                            });
+                    }
+                    this.ready = true;
+                    this.lineupReady = true;
+                    this.loading = false;
+                },
+                getEspnOwners: async function (leagueId) {
+                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId);
+                    let owners = [];
+                    for (let owner of request.data.teams) {
+                        owners.push({
+                            id: owner.id,
+                            owner: owner.location.trim() + " " + owner.nickname.trim()
+                        });
+                    }
+                    return owners;
+                },
+                getEspnRosteredPlayers: async function (leagueId) {
+                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mRoster');
+                    let rosters = [];
+                    let positionTranslations = {
+                        position1: 'QB',
+                        position2: 'RB',
+                        position3: 'WR',
+                        position4: 'TE',
+                        position5: 'K',
+                        position16: 'DST',
+                    }
+                    for (let owner of request.data.teams)
+                        for (let player of owner.roster.entries) {
+                            let positionId = player.playerPoolEntry.player.defaultPositionId
+                            if (!('position' + positionId in positionTranslations)) continue;
+                            let id = false;
+                            let name = player.playerPoolEntry.player.fullName;
+                            let position = positionTranslations['position' + positionId];
+                            let onRoster = owner.id;
+                            let starter = false;
+                            if (player.lineupSlotId < 20) starter = true;
+                            let rank = -1;
+                            let setRank = position == 'FLX' ? 'flxRank' : 'rank';
+                            this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
+                        }
+                },
+                getEspnRosterSlots: async function (leagueId) {
+                    let request = await axios.get('http://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings');
+                    let rosterSlotTranslations = {
+                        slot0: 'QB',
+                        slot2: 'RB',
+                        slot4: 'WR',
+                        slot6: 'TE',
+                        slot3: 'FLX',
+                        slot17: 'K',
+                        slot16: 'DST',
+                    }
+                    let rosterSlots = [];
+                    let slots = request.data.settings.rosterSettings.lineupSlotCounts;
+                    for (let i of Object.keys(slots))
+                        if ("slot" + i in rosterSlotTranslations)
+                            for (let j = 0; j < slots[i]; j++)
+                                rosterSlots.push(rosterSlotTranslations["slot" + i]);
+                    return rosterSlots;
+                },
+                getEspnData: async function () {
+                    if (this.espnLeagueId.length != 6) return;
+                    this.ready = false;
+                    this.lineupReady = false;
+                    this.clearPlayers();
+                    this.rosterStartPositions = await this.getEspnRosterSlots(this.espnLeagueId);
+                    await this.getEspnRosteredPlayers(this.espnLeagueId);
+                    await this.getFPRanks();
+                    let owners = await this.getEspnOwners(this.espnLeagueId);
+                    this.owners = owners;
+                },
+                getFPRanks: async function () {
+                    let fpData = {};
+                    for (let pos of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
+                        let r = await axios.get(this.scoring + '-' + pos + '.json');
+                        fpData[pos] = {
+                            players: r.data,
+                            position: pos
+                        };
+                    }
+                    const options = {
+                        threshold: 0.2,
+                        keys: ['name']
+                    }
+
+                    for (let pos of Object.keys(fpData)) {
+                        for (let player of fpData[pos].players) {
+                            if (this.platform == 'Sleeper') {
+                                let setRank = 'rank';
+                                if (pos == 'FLX')
+                                    setRank = 'flxRank';
+                                let platformPlayer = this.players.find(p => p.id == player.id);
+                                if (platformPlayer) {
+                                    platformPlayer[setRank] = player.rank;
+                                } else {
+                                    let id = player.id;
+                                    let name = player.name;
+                                    let position = player.position;
+                                    let onRoster = 0;
+                                    let starter = false;
+                                    let rank = player.rank;
+                                    this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
+                                }
+                            }
+                            if (this.platform == 'ESPN') {
+                                let search = player.name.replaceAll('.', '');
+                                let newName = false;
+                                if (fpData[pos].position == 'DST') {
+                                    search = player.name.split(' ').pop() + 'D/ST';
+                                    newName = player.name;
+                                }
+                                let setRank = 'rank';
+                                let getPos = [pos];
+                                if (pos == 'FLX') {
+                                    if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
+                                    if (this.flex == 'WR') getPos = ['RB', 'WR'];
+                                    setRank = 'flxRank';
+                                }
+                                let list = this.players.filter(p => getPos.indexOf(p.position) >= 0);
+                                if (list.length > 0) {
+                                    let fuse = new Fuse(list, options)
+                                    let results = fuse.search(search);
+                                    if (results.length > 0) {
+                                        let playerIndex = this.players.findIndex(p => p.name == results[0].item.name);
+                                        this.players[playerIndex][setRank] = player.rank;
+                                        if (newName)
+                                            this.players[playerIndex].name = newName;
+                                    } else {
+                                        let id = false;
+                                        let name = player.name;
+                                        let position = player.position;
+                                        let onRoster = 0;
+                                        let starter = false;
+                                        let rank = player.rank;
+                                        this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (let p of this.players)
+                        console.log(p.position, p.name, p.rank, p.flxRank);
+                }
+            }
+        })
+    </script>
+</body>
+
+</html>
