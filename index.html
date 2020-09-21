@@ -192,7 +192,7 @@
                 }
             },
             async mounted() {
-                axios.get('lastUpdatedAt.json').then(r => {
+                axios.get('data/lastUpdatedAt.json').then(r => {
                     this.lastUpdatedAt = r.data.date;
                     this.week = r.data.week;
                 });
@@ -310,7 +310,7 @@
                     return await axios.get('https://api.sleeper.app/v1/league/' + leagueId + '/rosters');
                 },
                 getSleeperPlayers: async function () {
-                    return await axios.get('sleeperPlayers.json');
+                    return await axios.get('data/sleeperPlayers.json');
                 },
                 getData: async function () {
                     this.ready = false;
@@ -445,7 +445,7 @@
                 getFPRanks: async function () {
                     let fpData = {};
                     for (let pos of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
-                        let r = await axios.get(this.scoring + '-' + pos + '.json');
+                        let r = await axios.get('data/' + this.scoring + '-' + pos + '.json');
                         fpData[pos] = {
                             players: r.data,
                             position: pos

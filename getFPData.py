@@ -2,7 +2,7 @@ import requests
 import json
 import datetime
 
-with open('lastUpdatedAt.json', 'w') as f:
+with open('data/lastUpdatedAt.json', 'w') as f:
     f.write(json.dumps(
         {"date": datetime.datetime.now().strftime("%m/%d/%Y %H:%M"), "week": str(
             (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[
@@ -34,7 +34,7 @@ for player in players:
             outPlayers[player]['name'] = players[player]['full_name']
             outPlayers[player]['id'] = players[player]['yahoo_id']
 
-with open('sleeperPlayers.json', 'w') as f:
+with open('data/sleeperPlayers.json', 'w') as f:
     f.write(json.dumps(outPlayers))
 
 getPos = ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']
@@ -63,5 +63,5 @@ for pos in getPos:
                     'rank': player['rank_ecr']
                 })
 
-        with open(scoringType+'-'+pos+'.json', 'w') as f:
+        with open('data/' + scoringType+'-'+pos+'.json', 'w') as f:
             f.write(json.dumps(outPlayers))
