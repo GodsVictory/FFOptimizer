@@ -62,13 +62,13 @@
                             <div class="field" style="margin:auto;width:85px;">
                                 <label class="label">Scoring</label>
                                 <div class="control">
-                                    <input type="radio" name="scoring" id="STD" class="radio" v-model="scoring" value="STD" checked v-on:click="refresh">
+                                    <input type="radio" name="scoring" id="STD" class="radio" v-model="scoring" value="STD" checked v-on:click="clear">
                                     <label class="radio is-size-7" for="STD">Standard</label>
                                     <br>
-                                    <input type="radio" name="scoring" id="HALF" class="radio" v-model="scoring" value="HALF" v-on:click="refresh">
+                                    <input type="radio" name="scoring" id="HALF" class="radio" v-model="scoring" value="HALF" v-on:click="clear">
                                     <label class="radio is-size-7" for="HALF">Half PPR</label>
                                     <br>
-                                    <input type="radio" name="scoring" id="PPR" class="radio" v-model="scoring" value="PPR" v-on:click="refresh">
+                                    <input type="radio" name="scoring" id="PPR" class="radio" v-model="scoring" value="PPR" v-on:click="clear">
                                     <label class="radio is-size-7" for="PPR">PPR</label>
                                 </div>
                             </div>
@@ -77,10 +77,10 @@
                             <div class="field" style="margin:auto;width:85px;">
                                 <label class="label">Flex</label>
                                 <div class="control">
-                                    <input type="radio" name="flex" id="WRT" class="radio" v-model="flex" value="WRT" checked v-on:click="refresh">
+                                    <input type="radio" name="flex" id="WRT" class="radio" v-model="flex" value="WRT" checked v-on:click="clear">
                                     <label class="radio is-size-7" for="WRT">RB/WR/TE</label>
                                     <br>
-                                    <input type="radio" name="flex" id="WR" class="radio" v-model="flex" value="WR" v-on:click="refresh">
+                                    <input type="radio" name="flex" id="WR" class="radio" v-model="flex" value="WR" v-on:click="clear">
                                     <label class="radio is-size-7" for="WR">RB/WR</label>
                                 </div>
                             </div>
@@ -89,10 +89,10 @@
                             <div class="field" style="margin:auto;width:85px;">
                                 <label class="label">Platform</label>
                                 <div class="control">
-                                    <input type="radio" name="platform" id="Sleeper" class="radio" v-model="platform" value="Sleeper" v-on:click="refresh">
+                                    <input type="radio" name="platform" id="Sleeper" class="radio" v-model="platform" value="Sleeper" v-on:click="clear">
                                     <label class="radio is-size-7" for="Sleeper">Sleeper</label>
                                     <br>
-                                    <input type="radio" name="platform" id="ESPN" class="radio" v-model="platform" value="ESPN" v-on:click="refresh">
+                                    <input type="radio" name="platform" id="ESPN" class="radio" v-model="platform" value="ESPN" v-on:click="clear">
                                     <label class="radio is-size-7" for="ESPN">ESPN</label>
                                 </div>
                             </div>
