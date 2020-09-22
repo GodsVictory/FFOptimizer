@@ -15,9 +15,9 @@ r = requests.get(url)
 players = r.json()
 outPlayers = {}
 for player in players:
-    if 'status' in players[player]:
-        if players[player]['status'] == 'Inactive':
-            continue
+#    if 'status' in players[player]:
+#        if players[player]['status'] == 'Inactive':
+#            continue
     if 'team' in players[player]:
         if players[player]['team'] is None:
             continue
