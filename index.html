@@ -116,6 +116,7 @@
                             <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
                         </div>
                     </div>
+                    <p class="help is-danger" v-if="error">Could not load league, is it set to public?</p>
                 </div>
                 <div class="box" v-if="owners.length > 0">
                     <div class="field has-addons">
@@ -188,7 +189,8 @@
                     flex: 'WRT',
                     lastPlatform: '',
                     lastUpdatedAt: '',
-                    week: ''
+                    week: '',
+                    error: false
                 }
             },
             async mounted() {
@@ -413,7 +415,11 @@
                         }
                 },
                 getEspnRosterSlots: async function (leagueId) {
-                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings');
+                    let failed = false;
+                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings').catch(r => {
+                        failed = true;
+                    });
+                    if (failed) return [];
                     let rosterSlotTranslations = {
                         slot0: 'QB',
                         slot2: 'RB',
@@ -432,14 +438,19 @@
                     return rosterSlots;
                 },
                 getEspnData: async function () {
+                    this.error = false;
                     this.ready = false;
                     this.lineupReady = false;
                     this.clearPlayers();
                     this.rosterStartPositions = await this.getEspnRosterSlots(this.espnLeagueId);
-                    await this.getEspnRosteredPlayers(this.espnLeagueId);
-                    await this.getFPRanks();
-                    let owners = await this.getEspnOwners(this.espnLeagueId);
-                    this.owners = owners;
+                    if (this.rosterStartPositions.length > 0) {
+                        await this.getEspnRosteredPlayers(this.espnLeagueId);
+                        await this.getFPRanks();
+                        let owners = await this.getEspnOwners(this.espnLeagueId);
+                        this.owners = owners;
+                    } else {
+                        this.error = true;
+                    }
                 },
                 getFPRanks: async function () {
                     let fpData = {};
