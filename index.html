@@ -241,11 +241,16 @@
                     this.loading = false;
                 },
                 getSleeperData: async function () {
+                    this.error = false;
                     if (this.sleeperLeagueId.length != 18) return;
                     this.ready = false;
                     this.lineupReady = false;
                     this.clearPlayers();
                     let rosters = await this.getSleeperRosters(this.sleeperLeagueId);
+                    if (!rosters.data) {
+                        this.error = true;
+                        return;
+                    }
                     let players = await this.getSleeperPlayers();
                     let positionTranslations = {
                         QB: 'QB',
@@ -309,7 +314,11 @@
                     return await axios.get('https://api.sleeper.app/v1/user/' + userID);
                 },
                 getSleeperRosters: async function (leagueId) {
-                    return await axios.get('https://api.sleeper.app/v1/league/' + leagueId + '/rosters');
+                    let failed = false;
+                    let rosters = await axios.get('https://api.sleeper.app/v1/league/' + leagueId + '/rosters').catch(r => {
+                        failed = true;
+                    });
+                    return failed || rosters;
                 },
                 getSleeperPlayers: async function () {
                     return await axios.get('data/sleeperPlayers.json');
