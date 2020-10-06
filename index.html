@@ -204,7 +204,7 @@
                 addPlayer: function (sportradar_id, name, position, roster_id, starter, rank, setRank) {
                     let obj = {
                         id: sportradar_id,
-                        name: name.replaceAll('.', ''),
+                        name: name.replace(/\./g, ''),
                         position: position,
                         onRoster: roster_id,
                         starter: starter,
@@ -495,7 +495,7 @@
                                 }
                             }
                             if (this.platform == 'ESPN') {
-                                let search = player.name.replaceAll('.', '');
+                                let search = player.name.replace(/\./g, '');
                                 let newName = false;
                                 if (fpData[pos].position == 'DST') {
                                     search = player.name.split(' ').pop() + 'D/ST';
