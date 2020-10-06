@@ -116,7 +116,8 @@
                             <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
                         </div>
                     </div>
-                    <p class="help is-danger" v-if="error">Could not load league, is it set to public?</p>
+                    <p class="help is-danger" v-if="error && platform == 'Sleeper'">Could not load league, please check your league ID</p>
+                    <p class="help is-danger" v-if="error && platform == 'ESPN'">Could not load league, is it set to public?</p>
                 </div>
                 <div class="box" v-if="owners.length > 0">
                     <div class="field has-addons">
@@ -242,7 +243,6 @@
                 },
                 getSleeperData: async function () {
                     this.error = false;
-                    if (this.sleeperLeagueId.length != 18) return;
                     this.ready = false;
                     this.lineupReady = false;
                     this.clearPlayers();
