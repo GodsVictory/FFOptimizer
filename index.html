@@ -498,7 +498,10 @@
                                 let search = player.name.replace(/\./g, '');
                                 let newName = false;
                                 if (fpData[pos].position == 'DST') {
-                                    search = player.name.split(' ').pop() + 'D/ST';
+                                    if (player.name.split(' ').shift() == 'Washington')
+                                        search = player.name.split(' ').shift() + ' D/ST';
+                                    else
+                                        search = player.name.split(' ').pop() + ' D/ST';
                                     newName = player.name;
                                 }
                                 let setRank = 'rank';
@@ -510,7 +513,7 @@
                                 }
                                 let list = this.players.filter(p => getPos.indexOf(p.position) >= 0);
                                 if (list.length > 0) {
-                                    let fuse = new Fuse(list, options)
+                                    let fuse = new Fuse(list, options);
                                     let results = fuse.search(search);
                                     if (results.length > 0) {
                                         let playerIndex = this.players.findIndex(p => p.name == results[0].item.name);
