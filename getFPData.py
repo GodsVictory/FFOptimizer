@@ -2,11 +2,13 @@ import requests
 import json
 import datetime
 
+week = (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[1] - 36
+if week < 1:
+  week = 1
+
 with open('data/lastUpdatedAt.json', 'w') as f:
     f.write(json.dumps(
-        {"date": datetime.datetime.now().strftime("%m/%d/%Y %H:%M"), "week": str(
-            (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[
-                1] - 36)}))
+        {"date": datetime.datetime.now().strftime("%m/%d/%Y %H:%M"), "week": str(week)}))
 
 
 getPos = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
