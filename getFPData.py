@@ -45,7 +45,7 @@ scoring = ['STD', 'HALF', 'PPR']
 for pos in getPos:
     for scoringType in scoring:
         outPlayers = []
-        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year=2020&week=' + str(
+        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year='+datetime.date.today().strftime("%Y")+'&week=' + str(
             (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[
                 1] - 36)+'&scoring='+scoringType+'&export=json&position=' + pos.upper()
         r = requests.get(url)
