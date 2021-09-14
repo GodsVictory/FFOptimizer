@@ -3,6 +3,7 @@ import json
 import datetime
 
 week = (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[1] - 36
+week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 36
 if week < 1:
   week = 1
 
@@ -45,9 +46,7 @@ scoring = ['STD', 'HALF', 'PPR']
 for pos in getPos:
     for scoringType in scoring:
         outPlayers = []
-        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year='+datetime.date.today().strftime("%Y")+'&week=' + str(
-            (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[
-                1] - 36)+'&scoring='+scoringType+'&export=json&position=' + pos.upper()
+        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year='+datetime.date.today().strftime("%Y")+'&week=' + str(week)+'&scoring='+scoringType+'&export=json&position=' + pos.upper()
         r = requests.get(url)
         for player in r.json()['players']:
             if pos == 'DST':
