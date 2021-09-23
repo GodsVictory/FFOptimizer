@@ -35,7 +35,7 @@ for player in players:
             outPlayers[player]['id'] = players[player]['player_id']
         else:
             outPlayers[player]['name'] = players[player]['full_name']
-            outPlayers[player]['id'] = players[player]['yahoo_id']
+            outPlayers[player]['id'] = players[player]['sportsdata_id']
 
 with open('data/sleeperPlayers.json', 'w') as f:
     f.write(json.dumps(outPlayers))
@@ -60,7 +60,7 @@ for pos in getPos:
                 outPlayers.append({
                     'name': player['player_name'],
                     'position': player['player_position_id'],
-                    'id': player['player_yahoo_id'],
+                    'id': player['sportsdata_id'],
                     'rank': player['rank_ecr']
                 })
 
