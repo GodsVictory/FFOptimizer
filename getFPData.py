@@ -35,7 +35,7 @@ for player in players:
             outPlayers[player]['id'] = players[player]['player_id']
         else:
             outPlayers[player]['name'] = players[player]['full_name']
-            outPlayers[player]['id'] = players[player]['sportsdata_id']
+            outPlayers[player]['id'] = players[player]['sportradar_id']
 
 with open('data/sleeperPlayers.json', 'w') as f:
     f.write(json.dumps(outPlayers))
