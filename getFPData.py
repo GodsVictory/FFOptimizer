@@ -7,6 +7,8 @@ week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 
 if week < 1:
   week = 17
 
+year = (datetime.date.today()-datetime.timedelta(days=14)).strftime("%Y")
+
 with open('data/lastUpdatedAt.json', 'w') as f:
     f.write(json.dumps(
         {"date": datetime.datetime.now().strftime("%m/%d/%Y %H:%M"), "week": str(week)}))
@@ -46,7 +48,7 @@ scoring = ['STD', 'HALF', 'PPR']
 for pos in getPos:
     for scoringType in scoring:
         outPlayers = []
-        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year='+datetime.date.today().strftime("%Y")+'&week=' + str(week)+'&scoring='+scoringType+'&export=json&position=' + pos.upper()
+        url = 'https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year='+year+'&week=' + str(week)+'&scoring='+scoringType+'&export=json&position=' + pos.upper()
         r = requests.get(url)
         for player in r.json()['players']:
             if pos == 'DST':
