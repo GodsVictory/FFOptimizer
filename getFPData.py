@@ -6,6 +6,8 @@ week = (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[1] - 3
 week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 36
 if week < 1:
   week = 1
+elif week > 17:
+  week = 17
 
 year = (datetime.date.today()-datetime.timedelta(days=14)).strftime("%Y")
 
