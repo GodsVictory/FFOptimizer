@@ -387,7 +387,7 @@
                     this.loading = false;
                 },
                 getEspnOwners: async function (leagueId) {
-                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId);
+                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId);
                     let owners = [];
                     for (let owner of request.data.teams) {
                         owners.push({
@@ -398,7 +398,7 @@
                     return owners;
                 },
                 getEspnRosteredPlayers: async function (leagueId) {
-                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mRoster');
+                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mRoster');
                     let rosters = [];
                     let positionTranslations = {
                         position1: 'QB',
@@ -425,7 +425,7 @@
                 },
                 getEspnRosterSlots: async function (leagueId) {
                     let failed = false;
-                    let request = await axios.get('https://fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings').catch(r => {
+                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings').catch(r => {
                         failed = true;
                     });
                     if (failed) return [];
