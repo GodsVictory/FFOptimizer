@@ -5,7 +5,7 @@ import datetime
 week = (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[1] - 36
 week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 36
 if week < 1:
-  week = 17
+  week = 1
 
 year = (datetime.date.today()-datetime.timedelta(days=14)).strftime("%Y")
 
