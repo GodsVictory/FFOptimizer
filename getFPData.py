@@ -3,7 +3,7 @@ import json
 import datetime
 
 week = (datetime.date.today() - datetime.timedelta(days=1)).isocalendar()[1] - 36
-week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 36
+week = int((datetime.date.today()+datetime.timedelta(days=5)).strftime("%U")) - 35
 if week < 1:
   week = 1
 elif week > 17:
