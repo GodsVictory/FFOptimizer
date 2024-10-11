@@ -516,6 +516,7 @@
                                     let fuse = new Fuse(list, options);
                                     let results = fuse.search(search);
                                     if (results.length > 0) {
+                                        console.log(results)
                                         let playerIndex = this.players.findIndex(p => p.name == results[0].item.name);
                                         this.players[playerIndex][setRank] = player.rank;
                                         if (newName)
