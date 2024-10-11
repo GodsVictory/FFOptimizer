@@ -477,8 +477,6 @@
 
                     for (let pos of Object.keys(fpData)) {
                         for (let player of fpData[pos].players) {
-console.log(player.name)
-console.log(player.rank)
                             if (this.platform == 'Sleeper') {
                                 let setRank = 'rank';
                                 if (pos == 'FLX')
@@ -514,12 +512,12 @@ console.log(player.rank)
                                     setRank = 'flxRank';
                                 }
                                 let list = this.players.filter(p => getPos.indexOf(p.position) >= 0);
-console.log(list)
                                 if (list.length > 0) {
                                     let fuse = new Fuse(list, options);
                                     let results = fuse.search(search);
                                     if (results.length > 0) {
                                         let playerIndex = this.players.findIndex(p => p.name == results[0].item.name);
+console.log(results[0].item.name, player.rank)
                                         this.players[playerIndex][setRank] = player.rank;
                                         if (newName)
                                             this.players[playerIndex].name = newName;
