@@ -1,545 +1,359 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="utf-8">
     <title>FF Optimizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="manifest" href="site.webmanifest">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css">
+    <link rel="stylesheet" href="css/app.css">
+
+    <!-- Third-Party Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css">
-    <style>
-        .noselect {
-            -webkit-touch-callout: none;
-            /* iOS Safari */
-            -webkit-user-select: none;
-            /* Safari */
-            -khtml-user-select: none;
-            /* Konqueror HTML */
-            -moz-user-select: none;
-            /* Old versions of Firefox */
-            -ms-user-select: none;
-            /* Internet Explorer/Edge */
-            user-select: none;
-            /* Non-prefixed version, currently
-                                  supported by Chrome, Edge, Opera and Firefox */
-        }
-    </style>
 </head>
 
 <body>
     <div id="app">
         <section class="section">
             <div class="container">
-                <div class="level is-mobile">
+                <!-- Header -->
+                <div class="level is-mobile mb-2">
                     <div class="level-left noselect">
                         <div class="level-item">
-                            <h1 class="title"><img src="favicon-32x32.png">FF<br>Optimizer</h1>
+                            <h1 class="brand-title">
+                                <img src="favicon-32x32.png" alt="FF Optimizer">
+                                <span>FF Optimizer</span>
+                            </h1>
                         </div>
                     </div>
                     <div class="level-right noselect">
-                        <p>
-                            <a class="level-item button is-black has-text-weight-bold" href="https://paypal.me/ReidandKat">Donate</a>
-                        </p>
+                        <div class="level-item">
+                            <a class="button is-black has-text-weight-bold is-small" href="https://paypal.me/ReidandKat" target="_blank" rel="noopener">Donate</a>
+                        </div>
                     </div>
                 </div>
-                <div class="level is-mobile">
+
+                <!-- Subtitle Metadata -->
+                <div class="level is-mobile mb-4">
                     <div class="level-left noselect">
-                        <p class="level-item subtitle">Week {{week}}</p>
+                        <p class="level-item subtitle is-6 has-text-weight-semibold">Week {{ week }}</p>
                     </div>
                     <div class="level-right noselect">
-                        <p class="level-item subtitle is-7">updated {{lastUpdatedAt}} minutes ago</p>
+                        <p class="level-item subtitle is-7 has-text-grey" v-if="lastUpdatedAt !== ''">updated {{ lastUpdatedAt }} minutes ago</p>
                     </div>
                 </div>
-                <hr>
-                <div class="box">
+
+                <hr class="mt-1 mb-4">
+
+                <!-- Settings Controls Box -->
+                <div class="box control-box">
                     <div class="columns is-mobile noselect is-centered">
+                        <!-- Scoring -->
                         <div class="column">
-                            <div class="field" style="margin:auto;width:85px;">
-                                <label class="label">Scoring</label>
-                                <div class="control">
-                                    <input type="radio" name="scoring" id="STD" class="radio" v-model="scoring" value="STD" checked v-on:click="clear">
-                                    <label class="radio is-size-7" for="STD">Standard</label>
-                                    <br>
-                                    <input type="radio" name="scoring" id="HALF" class="radio" v-model="scoring" value="HALF" v-on:click="clear">
-                                    <label class="radio is-size-7" for="HALF">Half PPR</label>
-                                    <br>
-                                    <input type="radio" name="scoring" id="PPR" class="radio" v-model="scoring" value="PPR" v-on:click="clear">
-                                    <label class="radio is-size-7" for="PPR">PPR</label>
+                            <div class="control-group">
+                                <label class="label is-size-7">Scoring</label>
+                                <div class="radio-group">
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="scoring" value="STD" v-model="scoring" @change="onScoringOrFlexChange"> Standard
+                                    </label>
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="scoring" value="HALF" v-model="scoring" @change="onScoringOrFlexChange"> Half PPR
+                                    </label>
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="scoring" value="PPR" v-model="scoring" @change="onScoringOrFlexChange"> PPR
+                                    </label>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Flex -->
                         <div class="column">
-                            <div class="field" style="margin:auto;width:85px;">
-                                <label class="label">Flex</label>
-                                <div class="control">
-                                    <input type="radio" name="flex" id="WRT" class="radio" v-model="flex" value="WRT" checked v-on:click="clear">
-                                    <label class="radio is-size-7" for="WRT">RB/WR/TE</label>
-                                    <br>
-                                    <input type="radio" name="flex" id="WR" class="radio" v-model="flex" value="WR" v-on:click="clear">
-                                    <label class="radio is-size-7" for="WR">RB/WR</label>
+                            <div class="control-group">
+                                <label class="label is-size-7">Flex</label>
+                                <div class="radio-group">
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="flex" value="WRT" v-model="flex" @change="onScoringOrFlexChange"> RB/WR/TE
+                                    </label>
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="flex" value="WR" v-model="flex" @change="onScoringOrFlexChange"> RB/WR
+                                    </label>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Platform -->
                         <div class="column">
-                            <div class="field" style="margin:auto;width:85px;">
-                                <label class="label">Platform</label>
-                                <div class="control">
-                                    <input type="radio" name="platform" id="Sleeper" class="radio" v-model="platform" value="Sleeper" v-on:click="clear">
-                                    <label class="radio is-size-7" for="Sleeper">Sleeper</label>
-                                    <br>
-                                    <input type="radio" name="platform" id="ESPN" class="radio" v-model="platform" value="ESPN" v-on:click="clear">
-                                    <label class="radio is-size-7" for="ESPN">ESPN</label>
+                            <div class="control-group">
+                                <label class="label is-size-7">Platform</label>
+                                <div class="radio-group">
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="platform" value="Sleeper" v-model="platform" @change="onPlatformChange"> Sleeper
+                                    </label>
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="platform" value="ESPN" v-model="platform" @change="onPlatformChange"> ESPN
+                                    </label>
+                                    <label class="radio-label is-size-7">
+                                        <input type="radio" name="platform" value="Yahoo" v-model="platform" @change="onPlatformChange"> Yahoo
+                                    </label>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Platform Inputs Box -->
                 <div class="box" v-if="platform">
-                    <div class="field has-addons" v-if="platform == 'Sleeper'">
-                        <div class="control is-expanded">
-                            <input type="text" id="sleeperLeagueId" class="input is-fullwidth" v-model="sleeperLeagueId" v-on:keyup.enter="refresh" v-on:keyup="clear" placeholder="League ID">
+                    <!-- Sleeper Input -->
+                    <!-- Sleeper Input -->
+                    <div v-if="platform === 'Sleeper'">
+                        <div class="field has-addons mb-2">
+                            <div class="control is-expanded">
+                                <input type="text" class="input" v-model="sleeperLeagueId" @input="updateQueryParams" @keyup.enter="refresh" placeholder="Sleeper League ID (e.g. 1048684918291410944)">
+                            </div>
+                            <div class="control">
+                                <button class="button is-black has-text-weight-bold" @click="refresh" title="Load League">&#10132;</button>
+                            </div>
                         </div>
-                        <div class="control">
-                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
+                        <p class="help has-text-grey">Find your Sleeper League ID in your league URL or league settings.</p>
+                    </div>
+
+                    <!-- ESPN Input -->
+                    <div v-if="platform === 'ESPN'">
+                        <div class="field has-addons mb-2">
+                            <div class="control is-expanded">
+                                <input type="text" class="input" v-model="espnLeagueId" @input="updateQueryParams" @keyup.enter="refresh" placeholder="ESPN League ID (e.g. 12345678)">
+                            </div>
+                            <div class="control">
+                                <button class="button is-black has-text-weight-bold" @click="refresh" title="Load League">&#10132;</button>
+                            </div>
+                        </div>
+                        <p class="help has-text-grey">League must be set to <strong>Public</strong> in ESPN League Settings.</p>
+                    </div>
+
+                    <!-- Yahoo Input Panel -->
+                    <div v-if="platform === 'Yahoo'">
+                        <div class="tabs is-toggle is-small is-fullwidth mb-3">
+                            <ul>
+                                <li :class="{'is-active': yahooMode === 'paste'}">
+                                    <a @click="yahooMode = 'paste'; updateQueryParams()"><strong>Quick Paste Roster (Zero-Auth)</strong></a>
+                                </li>
+                                <li :class="{'is-active': yahooMode === 'api'}">
+                                    <a @click="yahooMode = 'api'; updateQueryParams()"><strong>Yahoo API / League ID</strong></a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Yahoo Quick Paste Mode -->
+                        <div v-if="yahooMode === 'paste'">
+                            <div class="field">
+                                <label class="label is-size-7">Paste Yahoo Team / Matchup Roster:</label>
+                                <div class="control">
+                                    <textarea class="textarea is-small" rows="5" v-model="yahooRosterText" placeholder="Copy your Yahoo Fantasy roster table from your team page (or press Ctrl+A, Ctrl+C on your team page) and paste here..."></textarea>
+                                </div>
+                            </div>
+                            <div class="buttons are-small mt-2">
+                                <button class="button is-black has-text-weight-bold" @click="refresh">Optimize Lineup &#10132;</button>
+                                <button class="button is-light" @click="loadSampleYahooText">Load Sample Roster</button>
+                            </div>
+                            <p class="help has-text-grey">Works with any Yahoo league! Simply highlight and copy the roster table from your Yahoo team page.</p>
+                        </div>
+
+                        <!-- Yahoo API Mode -->
+                        <div v-if="yahooMode === 'api'">
+                            <div class="field mb-2">
+                                <label class="label is-size-7">Yahoo League ID or Key (e.g. 123456 or nfl.l.123456):</label>
+                                <div class="control">
+                                    <input type="text" class="input is-small" v-model="yahooLeagueId" @input="updateQueryParams" placeholder="Yahoo League ID">
+                                </div>
+                            </div>
+                            <div class="field mb-2">
+                                <label class="label is-size-7">
+                                    OAuth Access Token (Bearer Token):
+                                    <button class="help-btn" @click.prevent="showYahooHelp = !showYahooHelp" title="How do I get an OAuth token?">?</button>
+                                </label>
+                                <div class="control">
+                                    <input type="password" class="input is-small" v-model="yahooAccessToken" placeholder="Yahoo OAuth Access Token (Optional if using proxy)">
+                                </div>
+                            </div>
+
+                            <!-- Collapsible Yahoo Token Instructions -->
+                            <div class="message is-info is-small mt-2 mb-3" v-if="showYahooHelp">
+                                <div class="message-header py-1 px-3">
+                                    <p>How to get your Yahoo OAuth Token</p>
+                                    <button class="delete is-small" aria-label="close" @click="showYahooHelp = false"></button>
+                                </div>
+                                <div class="message-body is-size-7 py-2 px-3">
+                                    <ol class="pl-3 mb-2" style="line-height: 1.5;">
+                                        <li>Create a free app at <a href="https://developer.yahoo.com/apps/create/" target="_blank" rel="noopener">Yahoo Developer Network</a> (Select <strong>Web Application</strong>, Redirect URI: <code>https://localhost:8080</code>, Permissions: <strong>Fantasy Sports Read</strong>).</li>
+                                        <li>Run the helper script in your project terminal:
+                                            <pre class="my-1 p-1 has-background-white has-text-weight-semibold">python getYahooToken.py</pre>
+                                        </li>
+                                        <li>Enter your Client ID & Secret, authorize in your browser, and paste the generated access token above.</li>
+                                    </ol>
+                                    <p class="has-text-grey"><em>Note: Yahoo tokens expire after 1 hour. You can also use the <strong>Quick Paste Roster</strong> tab with zero tokens or setup!</em></p>
+                                </div>
+                            </div>
+                            <div class="field mb-2">
+                                <label class="label is-size-7">CORS Proxy URL (Optional):</label>
+                                <div class="control">
+                                    <input type="text" class="input is-small" v-model="yahooProxyUrl" placeholder="https://corsproxy.io/?url=">
+                                </div>
+                            </div>
+                            <div class="control mt-3">
+                                <button class="button is-black is-small has-text-weight-bold" @click="refresh">Connect Yahoo API &#10132;</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="field has-addons" v-if="platform == 'ESPN'">
-                        <div class="control is-expanded">
-                            <input type="text" id="espnLeagueId" class="input is-fullwidth" v-model="espnLeagueId" v-on:keyup.enter="refresh" v-on:keyup="clear" placeholder="League ID">
-                        </div>
-                        <div class="control">
-                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#10132;</div>
-                        </div>
+
+                    <!-- Error Alert -->
+                    <div class="notification is-danger is-light mt-3 py-2 px-3 is-size-7" v-if="errorMessage">
+                        {{ errorMessage }}
                     </div>
-                    <p class="help is-danger" v-if="error && platform == 'Sleeper'">Could not load league, please check your league ID</p>
-                    <p class="help is-danger" v-if="error && platform == 'ESPN'">Could not load league, is it set to public?</p>
                 </div>
+
+                <!-- Team / Owner Selection -->
                 <div class="box" v-if="owners.length > 0">
                     <div class="field has-addons">
                         <div class="control is-expanded">
                             <div class="select is-fullwidth">
-                                <select id="ownerId" v-on:change="getData" v-model="ownerId">
-                                    <option v-for="owner in owners" v-bind:value="owner.id">{{owner.owner}}</option>
-                                </select> </div>
+                                <select id="ownerId" v-model="ownerId" @change="onOwnerChange">
+                                    <option v-for="owner in owners" :key="owner.id" :value="owner.id">{{ owner.owner }}</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="control">
-                            <div class="control button is-black has-text-weight-bold" v-on:click="refresh" style="width: 40px;">&#8634;</div>
+                            <button class="button is-black has-text-weight-bold" @click="refresh" title="Reload Roster">&#8634;</button>
                         </div>
                     </div>
                 </div>
-                <div v-if="ready">
+
+                <!-- Results Section -->
+                <div v-if="ready && lineupReady">
                     <hr>
-                    <div class="columns is-multiline" v-if="lineupReady">
-                        <div class="column is-narrow">
-                            <div class="box" style="min-width: 100px;">
-                                <h1 class="title">Lineup</h1>
-                                <table>
-                                    <tr v-for="position in startPos" v-bind:style="{backgroundColor: position.backgroundColor}">
-                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;">{{position.position}}</td>
-                                        <td style="padding: 0 5px 0 5px;">{{position.name}}</td>
-                                    </tr>
+                    
+                    <div class="columns">
+                        <!-- LEFT COLUMN: Lineup, Bench, and Drop in the same card -->
+                        <div class="column is-narrow lineup-column">
+                            <div class="box">
+                                <!-- 1. Optimal Lineup Section -->
+                                <h2 class="title is-5 mb-3">Optimal Lineup</h2>
+                                <table class="lineup-table">
+                                    <tbody>
+                                        <tr v-for="(slotItem, idx) in optimalLineup" :key="'opt-' + idx" :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok'}">
+                                            <td class="pos-cell">{{ slotItem.slot }}</td>
+                                            <td class="name-cell" :title="slotItem.name">{{ slotItem.name }}</td>
+                                            <td class="rank-cell">{{ slotItem.rank === '-' ? '-' : '#' + slotItem.rank }}</td>
+                                        </tr>
+                                    </tbody>
                                 </table>
+
+                                <!-- 2. Bench Section -->
+                                <div class="mt-4 pt-3" style="border-top: 1px solid #e5e7eb;">
+                                    <h2 class="title is-5 mb-3">Bench</h2>
+                                    <table class="lineup-table" v-if="benchPlayers.length > 0">
+                                        <tbody>
+                                            <tr v-for="(benchItem, bIdx) in benchPlayers" :key="'bench-' + bIdx" :class="{'bench-rec': benchItem.highlight === 'bench'}">
+                                                <td class="pos-cell">{{ benchItem.position || benchItem.slot }}</td>
+                                                <td class="name-cell" :title="benchItem.name">{{ benchItem.name }}</td>
+                                                <td class="rank-cell">{{ benchItem.rank === '-' ? '-' : '#' + benchItem.rank }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p v-else class="is-size-7 has-text-grey py-1">No bench players</p>
+                                </div>
+
+                                <!-- 3. Drop Section -->
+                                <div class="mt-4 pt-3" style="border-top: 1px solid #e5e7eb;">
+                                    <h2 class="title is-5 mb-3">Drop</h2>
+                                    <table class="lineup-table" v-if="dropPlayers.length > 0">
+                                        <tbody>
+                                            <tr v-for="(dropItem, dIdx) in dropPlayers" :key="'drop-' + dIdx" class="drop-rec">
+                                                <td class="pos-cell">{{ dropItem.position || dropItem.slot }}</td>
+                                                <td class="name-cell" :title="dropItem.name">{{ dropItem.name }}</td>
+                                                <td class="rank-cell">{{ dropItem.rank === '-' ? '-' : '#' + dropItem.rank }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p v-else class="is-size-7 has-text-grey py-1">No drops recommended</p>
+                                </div>
                             </div>
                         </div>
-                        <div class="column is-narrow" v-for="positionData in data">
-                            <div class="box" style="min-width: 100px;">
-                                <h1 class="title">{{positionData.position}}</h1>
-                                <table>
-                                    <tr v-for="player in positionData.players">
-                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;" v-if="positionData.position == 'FLX'">{{player.flxRank}}</td>
-                                        <td style="text-align: right;font-weight: bold;padding: 0 5px 0 5px;" v-if="positionData.position != 'FLX'">{{player.rank}}</td>
-                                        <td style="padding: 0 5px 0 5px;">{{ player.name }}</td>
-                                    </tr>
-                                </table>
+
+                        <!-- RIGHT COLUMN: Wider column for Weekly and ROS Rankings -->
+                        <div class="column">
+                            <!-- Weekly Rankings Section -->
+                            <div class="section-header" v-if="Object.keys(positionColumns).length > 0">
+                                <h2 class="title is-5">Weekly Rankings (Week {{ week }})</h2>
+                                <p class="subtitle is-7 has-text-grey">Top consensus players by position for this week's matchups</p>
+                            </div>
+                            <div class="columns is-multiline">
+                                <!-- Weekly Position Rankings Columns -->
+                                <div class="column is-narrow" v-for="(colData, posKey) in positionColumns" :key="'week-' + posKey">
+                                    <div class="box">
+                                        <h3 class="title is-6 mb-2">{{ colData.position }}</h3>
+                                        <table class="rankings-table">
+                                            <tbody>
+                                                <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                                    <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
+                                                    <td class="name-cell" :title="player.name">{{ player.name }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rest of Season (ROS) Rankings Section -->
+                            <div class="section-header" v-if="Object.keys(rosPositionColumns).length > 0">
+                                <h2 class="title is-5">Rest of Season (ROS) Rankings</h2>
+                                <p class="subtitle is-7 has-text-grey">Consensus rest of season outlook for trades, playoffs, and long-term value</p>
+                            </div>
+                            <div class="columns is-multiline" v-if="Object.keys(rosPositionColumns).length > 0">
+                                <!-- ROS Position Rankings Columns -->
+                                <div class="column is-narrow" v-for="(colData, posKey) in rosPositionColumns" :key="'ros-' + posKey">
+                                    <div class="box">
+                                        <h3 class="title is-6 mb-2">{{ colData.position }}</h3>
+                                        <table class="rankings-table">
+                                            <tbody>
+                                                <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                                    <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
+                                                    <td class="name-cell" :title="player.name">{{ player.name }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
-        <div v-if="loading" style="width: 200%;height: 200%;background-color: rgb(0,0,0,.75);position: absolute;padding: 0;margin: 0;top:0;left:0;"></div>
-        <div v-if="loading" style="width: 100%;height: 100%;position: absolute;padding: 0;margin: 0;top:0;left:0;">
-            <div style="width: 100%;height: 100%;position: relative;">
-                <h1 class="title has-text-white noselect" style="margin: 0;position: absolute;top:50%;left:50%;-ms-transform: translate(-50%, -50%);transform: translate(-50%, -50%);opacity: 100%;">Loading...</h1>
-            </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" v-if="loading">
+            <div class="spinner"></div>
+            <h2 class="title is-4 has-text-white noselect">Optimizing Lineup...</h2>
         </div>
     </div>
-    <script>
-        var app = new Vue({
-            el: '#app',
-            data() {
-                return {
-                    platform: '',
-                    data: {},
-                    sleeperLeagueId: '',
-                    espnLeagueId: '',
-                    startPos: [],
-                    rosterStartPositions: [],
-                    ownerId: 0,
-                    ready: false,
-                    lineupReady: false,
-                    loading: false,
-                    players: [],
-                    owners: [],
-                    scoring: 'STD',
-                    flex: 'WRT',
-                    lastPlatform: '',
-                    lastUpdatedAt: '',
-                    week: '',
-                    error: false
-                }
-            },
-            async mounted() {
-                axios.get('data/lastUpdatedAt.json').then(r => {
-                    this.lastUpdatedAt = Math.floor((new Date() - new Date(r.data.date)) / 1000 / 60);
-                    this.week = r.data.week;
-                });
-            },
-            methods: {
-                addPlayer: function (sportradar_id, name, position, roster_id, starter, rank, setRank) {
-                    let obj = {
-                        id: sportradar_id,
-                        name: name.replace(/\./g, ''),
-                        position: position,
-                        onRoster: roster_id,
-                        starter: starter,
-                        rank: -1,
-                        flxRank: -1
-                    }
-                    obj[setRank] = rank;
-                    this.players.push(obj);
-                },
-                clear: function () {
-                    this.lineupReady = false;
-                    this.ready = false;
-                    this.players = [];
-                    this.startPos = [];
-                    this.data = {};
-                    this.owners = [];
-                },
-                clearPlayers: function () {
-                    this.players = [];
-                    this.startPos = [];
-                    this.data = {};
-                },
-                refresh: async function (event) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    this.loading = true;
-                    this.clear();
-                    if (this.lastPlatform != this.platform)
-                        this.ownerId = 0;
-                    this.lastPlatform = this.platform;
-                    if (this.platform == 'Sleeper')
-                        await this.getSleeperData();
-                    if (this.platform == 'ESPN')
-                        await this.getEspnData();
-                    if (this.ownerId != 0) await this.getData();
-                    this.loading = false;
-                },
-                getSleeperData: async function () {
-                    this.error = false;
-                    this.ready = false;
-                    this.lineupReady = false;
-                    this.clearPlayers();
-                    let rosters = await this.getSleeperRosters(this.sleeperLeagueId);
-                    if (!rosters.data) {
-                        this.error = true;
-                        return;
-                    }
-                    let players = await this.getSleeperPlayers();
-                    let positionTranslations = {
-                        QB: 'QB',
-                        RB: 'RB',
-                        WR: 'WR',
-                        TE: 'TE',
-                        FLEX: 'FLX',
-                        K: 'K',
-                        DEF: 'DST',
-                    }
 
-                    //get starters
-                    let onRosters = {};
-                    let onStarters = {};
-                    for (let roster of rosters.data) {
-                        for (let player of roster.players)
-                            onRosters[player] = roster.roster_id;
-                        for (let player of roster.starters)
-                            onStarters[player] = roster.roster_id;
-                    }
-                    for (let player of Object.keys(players.data)) {
-                        let onRoster = 0;
-                        if (player in onRosters)
-                            onRoster = onRosters[player];
-                        else continue;
-                        let starter = false;
-                        if (player in onStarters)
-                            starter = true;
-                        let id = players.data[player].id;
-                        let name = players.data[player].name;
-                        let position = positionTranslations[players.data[player].position];
-                        let rank = -1;
-                        let setRank = position == 'FLX' ? 'flxRank' : 'rank';
-                        this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
-                    }
-
-                    //get roster positions
-                    let leagueData = await this.getSleeperLeague(this.sleeperLeagueId);
-                    this.rosterStartPositions = [];
-                    for (let position of leagueData.data.roster_positions)
-                        if (position != "BN")
-                            this.rosterStartPositions.push(positionTranslations[position]);
-
-                    await this.getFPRanks();
-
-                    //get list of owner names for dropdown
-                    let owners = [];
-                    for (let roster of rosters.data) {
-                        let user = await this.getSleeperUser(roster.owner_id);
-                        owners.push({
-                            id: roster.roster_id,
-                            owner: user.data.display_name
-                        });
-                    }
-                    this.owners = owners;
-                },
-                getSleeperLeague: async function (leagueId) {
-                    return await axios.get('https://api.sleeper.app/v1/league/' + leagueId);
-                },
-                getSleeperUser: async function (userID) {
-                    return await axios.get('https://api.sleeper.app/v1/user/' + userID);
-                },
-                getSleeperRosters: async function (leagueId) {
-                    let failed = false;
-                    let rosters = await axios.get('https://api.sleeper.app/v1/league/' + leagueId + '/rosters').catch(r => {
-                        failed = true;
-                    });
-                    return failed || rosters;
-                },
-                getSleeperPlayers: async function () {
-                    return await axios.get('data/sleeperPlayers.json');
-                },
-                getData: async function () {
-                    this.ready = false;
-                    this.lineupReady = false;
-                    this.loading = true;
-                    await new Promise(resolve => setTimeout(resolve, 50));
-
-                    //get individual position rankings
-                    for (let position of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
-                        let getPos = [position];
-                        let getRank = 'rank';
-                        if (position == 'FLX') {
-                            if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
-                            if (this.flex == 'WR') getPos = ['RB', 'WR'];
-                            getRank = 'flxRank';
-                        }
-                        this.data[position] = {}
-                        this.data[position].position = position;
-                        this.data[position].players = this.players.filter(player => getPos.indexOf(player.position) >= 0 && player[getRank] > -1 && (player.onRoster == this.ownerId || player.onRoster == 0)).sort((a, b) => (a[getRank] - b[getRank])).slice(0, 10);
-                    }
-
-                    //clear old players
-                    this.startPos = [];
-
-                    //show blue for players you should play
-                    let starters = [];
-                    for (let position of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
-                        let slots = this.rosterStartPositions.filter(pos => pos == position).length;
-                        for (let i = 0; i < slots; i++) {
-                            let getPos = [position];
-                            let getRank = 'rank';
-                            if (position == 'FLX') {
-                                if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
-                                if (this.flex == 'WR') getPos = ['RB', 'WR'];
-                                getRank = 'flxRank';
-                            }
-                            for (let player of this.players.filter(player => getPos.indexOf(player.position) >= 0 && player[getRank] > -1 && (player.onRoster == this.ownerId || player.onRoster == 0)).sort((a, b) => (a[getRank] - b[getRank]))) {
-                                if (starters.indexOf(player.name) < 0) {
-                                    starters.push(player.name);
-                                    this.startPos.push({
-                                        name: player.name,
-                                        position: position,
-                                        backgroundColor: player.starter ? 'transparent' : 'lightblue'
-                                    });
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    //show red for players you should bench
-                    let currentStarters = this.players.filter(player => player.starter && player.onRoster == this.ownerId);
-                    for (let player of currentStarters) {
-                        if (this.startPos.filter(p => p.name == player.name).length == 0)
-                            this.startPos.push({
-                                position: 'BN',
-                                name: player.name,
-                                backgroundColor: 'palevioletred'
-                            });
-                    }
-                    this.ready = true;
-                    this.lineupReady = true;
-                    this.loading = false;
-                },
-                getEspnOwners: async function (leagueId) {
-                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId);
-                    let owners = [];
-                    for (let owner of request.data.teams) {
-                        owners.push({
-                            id: owner.id,
-                            owner: owner.abbrev.trim()
-                        });
-                    }
-                    return owners;
-                },
-                getEspnRosteredPlayers: async function (leagueId) {
-                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mRoster');
-                    let rosters = [];
-                    let positionTranslations = {
-                        position1: 'QB',
-                        position2: 'RB',
-                        position3: 'WR',
-                        position4: 'TE',
-                        position5: 'K',
-                        position16: 'DST',
-                    }
-                    for (let owner of request.data.teams)
-                        for (let player of owner.roster.entries) {
-                            let positionId = player.playerPoolEntry.player.defaultPositionId
-                            if (!('position' + positionId in positionTranslations)) continue;
-                            let id = false;
-                            let name = player.playerPoolEntry.player.fullName;
-                            let position = positionTranslations['position' + positionId];
-                            let onRoster = owner.id;
-                            let starter = false;
-                            if (player.lineupSlotId < 20) starter = true;
-                            let rank = -1;
-                            let setRank = position == 'FLX' ? 'flxRank' : 'rank';
-                            this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
-                        }
-                },
-                getEspnRosterSlots: async function (leagueId) {
-                    let failed = false;
-                    let request = await axios.get('https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/' + new Date().getFullYear() + '/segments/0/leagues/' + leagueId + '?view=mSettings').catch(r => {
-                        failed = true;
-                    });
-                    if (failed) return [];
-                    let rosterSlotTranslations = {
-                        slot0: 'QB',
-                        slot2: 'RB',
-                        slot4: 'WR',
-                        slot6: 'TE',
-                        slot3: 'FLX',
-                        slot17: 'K',
-                        slot16: 'DST',
-                    }
-                    let rosterSlots = [];
-                    let slots = request.data.settings.rosterSettings.lineupSlotCounts;
-                    for (let i of Object.keys(slots))
-                        if ("slot" + i in rosterSlotTranslations)
-                            for (let j = 0; j < slots[i]; j++)
-                                rosterSlots.push(rosterSlotTranslations["slot" + i]);
-                    return rosterSlots;
-                },
-                getEspnData: async function () {
-                    this.error = false;
-                    this.ready = false;
-                    this.lineupReady = false;
-                    this.clearPlayers();
-                    this.rosterStartPositions = await this.getEspnRosterSlots(this.espnLeagueId);
-                    if (this.rosterStartPositions.length > 0) {
-                        await this.getEspnRosteredPlayers(this.espnLeagueId);
-                        await this.getFPRanks();
-                        let owners = await this.getEspnOwners(this.espnLeagueId);
-                        this.owners = owners;
-                    } else {
-                        this.error = true;
-                    }
-                },
-                getFPRanks: async function () {
-                    let fpData = {};
-                    for (let pos of ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST']) {
-                        let r = await axios.get('data/' + this.scoring + '-' + pos + '.json');
-                        fpData[pos] = {
-                            players: r.data,
-                            position: pos
-                        };
-                    }
-                    const options = {
-                        threshold: 0.2,
-                        keys: ['name']
-                    }
-
-                    for (let pos of Object.keys(fpData)) {
-                        for (let player of fpData[pos].players) {
-                            if (this.platform == 'Sleeper') {
-                                let setRank = 'rank';
-                                if (pos == 'FLX')
-                                    setRank = 'flxRank';
-                                let platformPlayer = this.players.find(p => p.id == player.id);
-                                if (platformPlayer) {
-                                    platformPlayer[setRank] = player.rank;
-                                } else {
-                                    let id = player.id;
-                                    let name = player.name;
-                                    let position = player.position;
-                                    let onRoster = 0;
-                                    let starter = false;
-                                    let rank = player.rank;
-                                    this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
-                                }
-                            }
-                            if (this.platform == 'ESPN') {
-                                let search = player.name.replace(/\./g, '');
-                                let newName = false;
-                                if (fpData[pos].position == 'DST') {
-                                    if (player.name.split(' ').shift() == 'Washington')
-                                        search = player.name.split(' ').shift() + ' D/ST';
-                                    else
-                                        search = player.name.split(' ').pop() + ' D/ST';
-                                    newName = player.name;
-                                }
-                                let setRank = 'rank';
-                                let getPos = [pos];
-                                if (pos == 'FLX') {
-                                    if (this.flex == 'WRT') getPos = ['RB', 'WR', 'TE'];
-                                    if (this.flex == 'WR') getPos = ['RB', 'WR'];
-                                    setRank = 'flxRank';
-                                }
-                                let list = this.players.filter(p => getPos.indexOf(p.position) >= 0);
-                                if (list.length > 0) {
-                                    let fuse = new Fuse(list, options);
-                                    let results = fuse.search(search);
-                                    if (results.length > 0) {
-                                        let playerIndex = this.players.findIndex(p => p.name == results[0].item.name);
-                                        if (pos+'_ranked' in this.players[playerIndex] === false) this.players[playerIndex][setRank] = player.rank;
-                                        this.players[playerIndex][pos+'_ranked'] = true;
-                                        if (newName)
-                                            this.players[playerIndex].name = newName;
-                                    } else {
-                                        let id = false;
-                                        let name = player.name;
-                                        let position = player.position;
-                                        let onRoster = 0;
-                                        let starter = false;
-                                        let rank = player.rank;
-                                        this.addPlayer(id, name, position, onRoster, starter, rank, setRank);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    for (let p of this.players)
-                        console.log(p.position, p.name, p.rank, p.flxRank);
-                }
-            }
-        })
-    </script>
+    <!-- Application Modules -->
+    <script src="js/config.js"></script>
+    <script src="js/playerMatcher.js"></script>
+    <script src="js/services/fantasyProsService.js"></script>
+    <script src="js/services/sleeperService.js"></script>
+    <script src="js/services/espnService.js"></script>
+    <script src="js/services/yahooService.js"></script>
+    <script src="js/services/optimizerService.js"></script>
+    <script src="js/app.js"></script>
 </body>
 
 </html>
