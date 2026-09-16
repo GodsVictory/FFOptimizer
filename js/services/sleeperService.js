@@ -108,6 +108,7 @@ const SleeperService = {
         }
 
         return {
+            leagueName: (league && league.name) ? league.name : '',
             startingSlots,
             owners,
             rosteredPlayers

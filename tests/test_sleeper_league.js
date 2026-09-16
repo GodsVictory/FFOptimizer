@@ -32,6 +32,8 @@ async function run() {
     // 1. Fetch league data
     const leagueData = await SleeperService.loadLeagueData('1389343427119828992');
     assert.ok(leagueData.rosteredPlayers.length > 0, 'Rostered players should not be empty');
+    assert.strictEqual(leagueData.leagueName, 'Fantasyland', 'League name should be Fantasyland');
+    console.log(`[+] Found League: ${leagueData.leagueName}`);
     
     // Owner 8 verification
     const owner8 = leagueData.owners.find(o => String(o.id) === '8');

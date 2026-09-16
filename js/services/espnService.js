@@ -95,7 +95,9 @@ const EspnService = {
             }
         }
 
+        const leagueName = (data.settings && data.settings.name) || data.name || '';
         return {
+            leagueName,
             startingSlots,
             owners,
             rosteredPlayers

@@ -131,6 +131,7 @@ const YahooService = {
             : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'];
 
         return {
+            leagueName: 'Yahoo Roster',
             startingSlots: finalStartingSlots,
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
             rosteredPlayers
@@ -208,6 +209,7 @@ const YahooService = {
         }
 
         return {
+            leagueName: 'Yahoo Roster',
             startingSlots: startingSlots.length > 0 ? startingSlots : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'],
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
             rosteredPlayers
@@ -263,10 +265,14 @@ const YahooService = {
         const startingSlots = [];
         const owners = [];
         const rosteredPlayers = [];
+        let leagueName = '';
 
         try {
             // 1. Settings / roster positions
             const leagueObj = settingsJson.fantasy_content && settingsJson.fantasy_content.league;
+            if (leagueObj && leagueObj[0] && leagueObj[0].name) {
+                leagueName = leagueObj[0].name;
+            }
             const settings = leagueObj && leagueObj[1] && leagueObj[1].settings;
             if (settings && settings[0] && settings[0].roster_positions) {
                 for (const posItem of settings[0].roster_positions) {
@@ -353,6 +359,7 @@ const YahooService = {
         }
 
         return {
+            leagueName: leagueName || 'Yahoo League',
             startingSlots: startingSlots.length > 0 ? startingSlots : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'],
             owners,
             rosteredPlayers

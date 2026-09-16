@@ -24,6 +24,7 @@ var app = new Vue({
             ownerId: '',
             pendingOwnerId: '',
             owners: [],
+            leagueName: '',
             startingSlots: [],
             rosteredPlayers: [],
             allRankedPlayers: [],
@@ -41,7 +42,8 @@ var app = new Vue({
             errorMessage: '',
             week: '',
             lastUpdatedAt: '',
-            lastPlatform: ''
+            lastPlatform: '',
+            leagueHistory: []
         };
     },
 
@@ -57,6 +59,7 @@ var app = new Vue({
     async mounted() {
         this.loadPreferences();
         this.loadQueryParams();
+        this.loadHistory();
 
         try {
             const meta = await FantasyProsService.fetchMetadata();
@@ -217,6 +220,29 @@ var app = new Vue({
             this.allRosRankedPlayers = [];
             this.owners = [];
             this.ownerId = '';
+            this.leagueName = '';
+        },
+
+        async refreshRankings() {
+            this.loading = true;
+            this.errorMessage = '';
+            try {
+                FantasyProsService.clearCache();
+                if (this.rosteredPlayers.length > 0) {
+                    await this.applyRankings();
+                    if (this.ownerId) {
+                        this.optimize();
+                    }
+                }
+                const meta = await FantasyProsService.fetchMetadata();
+                this.week = meta.week;
+                this.lastUpdatedAt = meta.minutesAgo;
+            } catch (err) {
+                console.error('Failed to refresh rankings:', err);
+                this.errorMessage = 'Could not refresh rankings from FantasyPros.';
+            } finally {
+                this.loading = false;
+            }
         },
 
         async refresh() {
@@ -252,6 +278,7 @@ var app = new Vue({
                     throw new Error('No rostered players found for this league.');
                 }
 
+                this.leagueName = leagueData.leagueName || '';
                 this.startingSlots = leagueData.startingSlots || [];
                 this.owners = leagueData.owners || [];
                 this.rosteredPlayers = leagueData.rosteredPlayers;
@@ -271,12 +298,19 @@ var app = new Vue({
                 // 2. Fetch and apply FantasyPros rankings
                 await this.applyRankings();
 
+                try {
+                    const meta = await FantasyProsService.fetchMetadata();
+                    this.week = meta.week;
+                    this.lastUpdatedAt = meta.minutesAgo;
+                } catch (e) {}
+
                 // 3. Optimize lineup for selected owner
                 if (this.ownerId) {
                     this.optimize();
                 }
 
                 this.updateQueryParams();
+                this.saveToHistory();
                 this.ready = true;
             } catch (err) {
                 console.error('Refresh error:', err);
@@ -459,6 +493,124 @@ var app = new Vue({
         onOwnerChange() {
             this.optimize();
             this.updateQueryParams();
+            this.saveToHistory();
+        },
+
+        loadHistory() {
+            try {
+                const raw = localStorage.getItem('ff_league_history');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        this.leagueHistory = parsed;
+                    }
+                }
+            } catch (e) {
+                this.leagueHistory = [];
+            }
+        },
+
+        saveToHistory() {
+            try {
+                let currentLeagueId = '';
+                if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+                else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+                else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+                if (!currentLeagueId) return;
+
+                let ownerName = '';
+                if (this.owners && this.owners.length > 0) {
+                    const ownerObj = this.owners.find(o => String(o.id) === String(this.ownerId));
+                    if (ownerObj && ownerObj.owner) {
+                        ownerName = ownerObj.owner;
+                    }
+                }
+
+                let currentLeagueName = this.leagueName || '';
+                if (!currentLeagueName && this.leagueHistory) {
+                    const existing = this.leagueHistory.find(h => 
+                        h.platform === this.platform && 
+                        String(h.leagueId) === String(currentLeagueId) && 
+                        h.leagueName
+                    );
+                    if (existing) currentLeagueName = existing.leagueName;
+                }
+
+                const entry = {
+                    platform: this.platform,
+                    leagueId: currentLeagueId,
+                    leagueName: currentLeagueName,
+                    scoring: this.scoring || 'STD',
+                    flex: this.flex || 'WRT',
+                    owner: this.ownerId ? String(this.ownerId) : '',
+                    ownerName: ownerName,
+                    timestamp: Date.now()
+                };
+
+                // Filter out any prior duplicate (same platform, leagueId, and owner)
+                const history = (this.leagueHistory || []).filter(h => 
+                    !(h.platform === entry.platform && 
+                      String(h.leagueId) === String(entry.leagueId) && 
+                      String(h.owner || '') === String(entry.owner || ''))
+                );
+
+                // Add new entry to the front
+                history.unshift(entry);
+
+                // Keep up to 10 most recent leagues
+                this.leagueHistory = history.slice(0, 10);
+                localStorage.setItem('ff_league_history', JSON.stringify(this.leagueHistory));
+            } catch (e) {}
+        },
+
+        async selectHistoryItem(item) {
+            if (!item) return;
+            this.platform = item.platform;
+            this.scoring = item.scoring || 'STD';
+            this.flex = item.flex || 'WRT';
+            this.leagueName = item.leagueName || '';
+
+            if (item.platform === 'Sleeper') this.sleeperLeagueId = item.leagueId;
+            else if (item.platform === 'ESPN') this.espnLeagueId = item.leagueId;
+            else if (item.platform === 'Yahoo') {
+                this.yahooLeagueId = item.leagueId;
+                this.yahooMode = 'api';
+            }
+
+            this.pendingOwnerId = item.owner || '';
+            this.ownerId = item.owner || '';
+            this.savePreferences();
+            this.updateQueryParams();
+            await this.refresh();
+        },
+
+        removeHistoryItem(index) {
+            try {
+                this.leagueHistory.splice(index, 1);
+                localStorage.setItem('ff_league_history', JSON.stringify(this.leagueHistory));
+            } catch (e) {}
+        },
+
+        clearHistory() {
+            this.leagueHistory = [];
+            try {
+                localStorage.removeItem('ff_league_history');
+            } catch (e) {}
+        },
+
+        isCurrentHistoryItem(item) {
+            if (!item) return false;
+            let currentLeagueId = '';
+            if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+            else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+            else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+            const samePlatform = (this.platform === item.platform);
+            const sameLeague = (String(currentLeagueId) === String(item.leagueId));
+            const sameOwner = (!item.owner || String(this.ownerId) === String(item.owner));
+
+            return samePlatform && sameLeague && sameOwner;
         },
 
         /**

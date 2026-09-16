@@ -398,3 +398,55 @@
     margin-bottom: 0.25rem !important;
     line-height: 1.3;
 }
+
+/* Recent Leagues History Tags */
+.recent-league-tag {
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+}
+
+.recent-league-tag:hover {
+    background-color: #e5e7eb;
+    color: #111827;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.recent-league-tag.is-active {
+    background-color: #111827 !important;
+    color: #ffffff !important;
+    border-color: #111827;
+}
+
+.recent-league-tag.is-active .tag-platform {
+    color: #60a5fa !important;
+}
+
+.recent-league-tag .tag-league-name {
+    color: #111827;
+}
+
+.recent-league-tag .tag-owner-name {
+    color: #6b7280;
+}
+
+.recent-league-tag.is-active .tag-league-name {
+    color: #ffffff !important;
+}
+
+.recent-league-tag.is-active .tag-owner-name {
+    color: #d1d5db !important;
+}
+
+.recent-league-tag.is-active .delete {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+.recent-league-tag.is-active .delete:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+

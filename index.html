@@ -44,10 +44,15 @@
                 <!-- Subtitle Metadata -->
                 <div class="level is-mobile mb-4">
                     <div class="level-left noselect">
-                        <p class="level-item subtitle is-6 has-text-weight-semibold">Week {{ week }}</p>
+                        <div class="level-item is-flex is-align-items-center">
+                            <span class="subtitle is-6 has-text-weight-semibold mr-3">Week {{ week }}</span>
+                            <button class="button is-ghost is-small p-0 is-size-7 has-text-grey" @click="refreshRankings" title="Fetch fresh consensus rankings from FantasyPros">&#8635; Refresh Ranks</button>
+                        </div>
                     </div>
                     <div class="level-right noselect">
-                        <p class="level-item subtitle is-7 has-text-grey" v-if="lastUpdatedAt !== ''">updated {{ lastUpdatedAt }} minutes ago</p>
+                        <p class="level-item subtitle is-7 has-text-grey" v-if="lastUpdatedAt !== ''">
+                            {{ lastUpdatedAt === 0 ? 'ranks updated just now' : 'ranks updated ' + lastUpdatedAt + 'm ago' }}
+                        </p>
                     </div>
                 </div>
 
@@ -217,10 +222,36 @@
                     <div class="notification is-danger is-light mt-3 py-2 px-3 is-size-7" v-if="errorMessage">
                         {{ errorMessage }}
                     </div>
+
+                    <!-- Recent Leagues History -->
+                    <div class="recent-leagues-box mt-3 pt-3" v-if="leagueHistory && leagueHistory.length > 0" style="border-top: 1px solid #f0f0f0;">
+                        <div class="is-flex is-justify-content-between is-align-items-center mb-2">
+                            <span class="is-size-7 has-text-weight-bold has-text-grey">Recent Leagues:</span>
+                            <a class="is-size-7 has-text-grey" @click.prevent="clearHistory" style="cursor: pointer;" title="Clear all history">Clear</a>
+                        </div>
+                        <div class="tags are-small mb-0">
+                            <span v-for="(item, idx) in leagueHistory" :key="idx" 
+                                  class="tag is-rounded recent-league-tag" 
+                                  :class="{'is-active': isCurrentHistoryItem(item)}"
+                                  @click="selectHistoryItem(item)" 
+                                  :title="'Load ' + item.platform + ' • ' + (item.leagueName ? item.leagueName + ' • ' : '') + (item.ownerName ? item.ownerName + ' • ' : '') + item.leagueId + ' (' + item.scoring + ')'">
+                                <span class="tag-platform has-text-weight-semibold mr-1">{{ item.platform }}:</span>
+                                <span class="tag-league-name has-text-weight-medium" v-if="item.leagueName">{{ item.leagueName }}</span>
+                                <span class="tag-owner-name ml-1" v-if="item.ownerName && item.leagueName">({{ item.ownerName }})</span>
+                                <span class="tag-owner-name" v-else-if="item.ownerName">{{ item.ownerName }}</span>
+                                <span class="tag-league-id" v-else>{{ item.leagueId }}</span>
+                                <button class="delete is-small ml-1" @click.stop.prevent="removeHistoryItem(idx)" title="Remove from history"></button>
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Team / Owner Selection -->
                 <div class="box" v-if="owners.length > 0">
+                    <div class="is-flex is-justify-content-between is-align-items-center mb-2" v-if="leagueName">
+                        <span class="has-text-weight-bold is-size-6">{{ leagueName }}</span>
+                        <span class="tag is-light is-size-7">{{ platform }}</span>
+                    </div>
                     <div class="field has-addons">
                         <div class="control is-expanded">
                             <div class="select is-fullwidth">
