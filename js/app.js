@@ -62,7 +62,7 @@ var app = new Vue({
         this.loadHistory();
 
         try {
-            const meta = await FantasyProsService.fetchMetadata();
+            const meta = await FantasyProsService.fetchMetadata(this.scoring);
             this.week = meta.week;
             this.lastUpdatedAt = meta.minutesAgo;
         } catch (e) {
@@ -150,6 +150,31 @@ var app = new Vue({
             } catch (e) {}
         },
 
+        getSavedOwnerForLeague(platform, leagueId) {
+            if (!platform || !leagueId) return '';
+            try {
+                const direct = localStorage.getItem(`ff_owner_${platform}_${leagueId}`);
+                if (direct) return direct;
+
+                if (this.leagueHistory && this.leagueHistory.length > 0) {
+                    const found = this.leagueHistory.find(h => 
+                        h.platform === platform && 
+                        String(h.leagueId) === String(leagueId) && 
+                        h.owner
+                    );
+                    if (found) return String(found.owner);
+                }
+            } catch (e) {}
+            return '';
+        },
+
+        saveOwnerForLeague(platform, leagueId, ownerId) {
+            if (!platform || !leagueId || !ownerId) return;
+            try {
+                localStorage.setItem(`ff_owner_${platform}_${leagueId}`, String(ownerId));
+            } catch (e) {}
+        },
+
         loadPreferences() {
             try {
                 const savedPlatform = localStorage.getItem('ff_platform');
@@ -172,6 +197,18 @@ var app = new Vue({
 
                 const savedYahooMode = localStorage.getItem('ff_yahoo_mode');
                 if (savedYahooMode) this.yahooMode = savedYahooMode;
+
+                // Determine active league ID for restored platform and restore saved owner
+                let currentLeagueId = '';
+                if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+                else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+                else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+                const savedOwner = this.getSavedOwnerForLeague(this.platform, currentLeagueId);
+                if (savedOwner) {
+                    this.pendingOwnerId = savedOwner;
+                    this.ownerId = savedOwner;
+                }
             } catch (e) {
                 // Ignore localStorage errors (e.g. incognito mode)
             }
@@ -186,6 +223,15 @@ var app = new Vue({
                 if (this.espnLeagueId) localStorage.setItem('ff_espn_league_id', this.espnLeagueId);
                 if (this.yahooLeagueId) localStorage.setItem('ff_yahoo_league_id', this.yahooLeagueId);
                 if (this.yahooMode) localStorage.setItem('ff_yahoo_mode', this.yahooMode);
+
+                let currentLeagueId = '';
+                if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+                else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+                else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+                if (currentLeagueId && this.ownerId) {
+                    this.saveOwnerForLeague(this.platform, currentLeagueId, this.ownerId);
+                }
             } catch (e) {}
         },
 
@@ -234,7 +280,7 @@ var app = new Vue({
                         this.optimize();
                     }
                 }
-                const meta = await FantasyProsService.fetchMetadata();
+                const meta = await FantasyProsService.fetchMetadata(this.scoring, true);
                 this.week = meta.week;
                 this.lastUpdatedAt = meta.minutesAgo;
             } catch (err) {
@@ -250,7 +296,7 @@ var app = new Vue({
             this.loading = true;
             this.savePreferences();
 
-            if (this.lastPlatform !== this.platform) {
+            if (this.lastPlatform && this.lastPlatform !== this.platform) {
                 this.ownerId = '';
             }
             this.lastPlatform = this.platform;
@@ -283,23 +329,41 @@ var app = new Vue({
                 this.owners = leagueData.owners || [];
                 this.rosteredPlayers = leagueData.rosteredPlayers;
 
-                // Auto-select owner (matching pendingOwnerId if provided from query params, otherwise first owner)
+                // Auto-select owner:
+                // Priority:
+                // 1. pendingOwnerId (from query params, preferences, or history)
+                // 2. this.ownerId (if already active)
+                // 3. getSavedOwnerForLeague (from localStorage / history)
+                // 4. fallback: first owner in alphabetical order
+                let currentLeagueId = '';
+                if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+                else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+                else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
                 if (this.owners.length > 0) {
+                    const targetOwner = this.pendingOwnerId || this.ownerId || this.getSavedOwnerForLeague(this.platform, currentLeagueId);
                     let selected = null;
-                    if (this.pendingOwnerId) {
-                        selected = this.owners.find(o => String(o.id) === String(this.pendingOwnerId) || String(o.owner).toLowerCase() === String(this.pendingOwnerId).toLowerCase());
+
+                    if (targetOwner) {
+                        selected = this.owners.find(o => 
+                            String(o.id) === String(targetOwner) || 
+                            String(o.owner).toLowerCase() === String(targetOwner).toLowerCase()
+                        );
                     }
-                    if (!selected && this.ownerId) {
-                        selected = this.owners.find(o => o.id == this.ownerId);
-                    }
+
                     this.ownerId = selected ? selected.id : this.owners[0].id;
+                    this.pendingOwnerId = ''; // Consumed
+
+                    if (currentLeagueId && this.ownerId) {
+                        this.saveOwnerForLeague(this.platform, currentLeagueId, this.ownerId);
+                    }
                 }
 
                 // 2. Fetch and apply FantasyPros rankings
                 await this.applyRankings();
 
                 try {
-                    const meta = await FantasyProsService.fetchMetadata();
+                    const meta = await FantasyProsService.fetchMetadata(this.scoring, true);
                     this.week = meta.week;
                     this.lastUpdatedAt = meta.minutesAgo;
                 } catch (e) {}
@@ -491,6 +555,14 @@ var app = new Vue({
         },
 
         onOwnerChange() {
+            let currentLeagueId = '';
+            if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+            else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+            else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+            if (currentLeagueId && this.ownerId) {
+                this.saveOwnerForLeague(this.platform, currentLeagueId, this.ownerId);
+            }
             this.optimize();
             this.updateQueryParams();
             this.saveToHistory();
@@ -507,6 +579,19 @@ var app = new Vue({
                 }
             } catch (e) {
                 this.leagueHistory = [];
+            }
+
+            if (!this.pendingOwnerId && !this.ownerId) {
+                let currentLeagueId = '';
+                if (this.platform === 'Sleeper') currentLeagueId = (this.sleeperLeagueId || '').trim();
+                else if (this.platform === 'ESPN') currentLeagueId = (this.espnLeagueId || '').trim();
+                else if (this.platform === 'Yahoo') currentLeagueId = (this.yahooLeagueId || '').trim();
+
+                const savedOwner = this.getSavedOwnerForLeague(this.platform, currentLeagueId);
+                if (savedOwner) {
+                    this.pendingOwnerId = savedOwner;
+                    this.ownerId = savedOwner;
+                }
             }
         },
 

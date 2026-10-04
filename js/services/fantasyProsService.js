@@ -162,6 +162,7 @@ const FantasyProsService = {
                             this._cache[scoring] = cached.rankingsByPos;
                             if (cached.week) this._lastWeek = cached.week;
                             this._cacheTimestamp = cached.timestamp;
+                            this._metadata = null;
                             return cached.rankingsByPos;
                         }
                     }
@@ -211,6 +212,7 @@ const FantasyProsService = {
 
             this._cache[scoring] = rankingsByPos;
             this._cacheTimestamp = Date.now();
+            this._metadata = null;
 
             // Store in browser localStorage
             try {
@@ -289,6 +291,7 @@ const FantasyProsService = {
             }
 
             this._rosCache[scoring] = rosByPos;
+            this._metadata = null;
 
             // Store in browser localStorage
             try {
@@ -352,54 +355,67 @@ const FantasyProsService = {
 
     /**
      * Fetches metadata including current active NFL week and cache age.
+     * @param {string} scoring Scoring format ('PPR', 'HALF', 'STD')
+     * @param {boolean} force Force recalculate without using cached metadata
      */
-    async fetchMetadata() {
-        if (this._metadata) {
-            return this._metadata;
+    async fetchMetadata(scoring = 'PPR', force = false) {
+        if (force) {
+            this._metadata = null;
         }
 
-        try {
-            const state = await this.getNflState();
-            let minutesAgo = 0;
+        let week = this._lastWeek;
+        let year = '';
 
-            if (this._cacheTimestamp) {
-                minutesAgo = Math.max(0, Math.floor((Date.now() - this._cacheTimestamp) / 1000 / 60));
-            } else if (typeof localStorage !== 'undefined') {
-                const raw = localStorage.getItem('ff_rankings_PPR') || localStorage.getItem('ff_rankings_STD');
+        if (!this._nflState) {
+            try {
+                this._nflState = await this.getNflState();
+            } catch (e) {}
+        }
+        if (this._nflState) {
+            if (!week) week = this._nflState.week;
+            year = this._nflState.year;
+        }
+
+        const TTL = 2 * 60 * 60 * 1000; // 2 hours
+        let timestamp = this._cacheTimestamp;
+
+        // If in-memory timestamp is not set yet, check browser localStorage
+        if (!timestamp && typeof localStorage !== 'undefined') {
+            const keysToCheck = [
+                'ff_rankings_' + scoring,
+                'ff_rankings_PPR',
+                'ff_rankings_HALF',
+                'ff_rankings_STD'
+            ];
+            for (const k of keysToCheck) {
+                const raw = localStorage.getItem(k);
                 if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && parsed.timestamp) {
-                        minutesAgo = Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000 / 60));
-                    }
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && parsed.timestamp) {
+                            // Only use timestamp if within 2-hour TTL
+                            if (Date.now() - parsed.timestamp < TTL) {
+                                timestamp = parsed.timestamp;
+                                if (parsed.week && !this._lastWeek) week = parsed.week;
+                                break;
+                            }
+                        }
+                    } catch (e) {}
                 }
             }
+        }
 
-            this._metadata = {
-                week: String(this._lastWeek || state.week),
-                year: state.year,
-                minutesAgo: isNaN(minutesAgo) ? 0 : minutesAgo
-            };
-            return this._metadata;
-        } catch (e) {}
+        let minutesAgo = 0;
+        if (timestamp) {
+            minutesAgo = Math.max(0, Math.floor((Date.now() - timestamp) / 1000 / 60));
+        }
 
-        // Fallback to local lastUpdatedAt.json if available
-        try {
-            if (typeof axios !== 'undefined') {
-                const res = await axios.get('data/lastUpdatedAt.json');
-                const data = res.data;
-                const updatedDate = new Date(data.date);
-                const minutesAgo = Math.max(0, Math.floor((new Date() - updatedDate) / 1000 / 60));
-
-                this._metadata = {
-                    week: data.week,
-                    date: data.date,
-                    minutesAgo: isNaN(minutesAgo) ? 0 : minutesAgo
-                };
-                return this._metadata;
-            }
-        } catch (err) {}
-
-        return { week: '1', date: '', minutesAgo: 0 };
+        this._metadata = {
+            week: String(week || '1'),
+            year: year || String(new Date().getFullYear()),
+            minutesAgo: isNaN(minutesAgo) ? 0 : minutesAgo
+        };
+        return this._metadata;
     },
 
     /**
@@ -409,6 +425,8 @@ const FantasyProsService = {
         this._cache = {};
         this._rosCache = {};
         this._metadata = null;
+        this._nflState = null;
+        this._lastWeek = null;
         this._cacheTimestamp = null;
         try {
             if (typeof localStorage !== 'undefined') {

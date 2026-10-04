@@ -1,4 +1,4 @@
-﻿const assert = require('assert');
+const assert = require('assert');
 
 // Mock localStorage
 const storage = new Map();
@@ -45,6 +45,27 @@ async function test() {
     FantasyProsService.clearCache();
     assert.strictEqual(localStorage.getItem('ff_rankings_PPR'), null, 'localStorage item deleted');
     console.log('   [PASS] clearCache successfully wiped storage');
+
+    // 5. Test fetchMetadata freshness after ranking fetch
+    console.log('5. Testing fetchMetadata() after fresh ranking fetch...');
+    await FantasyProsService.fetchRankings('PPR');
+    const metaFresh = await FantasyProsService.fetchMetadata('PPR', true);
+    assert.strictEqual(metaFresh.minutesAgo, 0, 'Fresh rankings should report 0m ago');
+    console.log(`   [PASS] Fresh rankings metadata: Week ${metaFresh.week}, ${metaFresh.minutesAgo}m ago`);
+
+    // 6. Test fetchMetadata does NOT report thousands of minutes if cache is expired
+    console.log('6. Testing fetchMetadata() with expired localStorage cache...');
+    FantasyProsService._cacheTimestamp = null;
+    FantasyProsService._metadata = null;
+    const eighteenDaysAgo = Date.now() - (18 * 24 * 60 * 60 * 1000);
+    localStorage.setItem('ff_rankings_PPR', JSON.stringify({
+        timestamp: eighteenDaysAgo,
+        week: 2,
+        rankingsByPos: {}
+    }));
+    const metaExpired = await FantasyProsService.fetchMetadata('PPR', true);
+    assert.strictEqual(metaExpired.minutesAgo, 0, 'Expired cache should not display thousands of minutes ago');
+    console.log(`   [PASS] Expired cache avoided stale minutes: ${metaExpired.minutesAgo}m ago (not ~25,000m)`);
 
     console.log('\nALL RANKINGS CACHE TESTS PASSED! [OK]');
 }

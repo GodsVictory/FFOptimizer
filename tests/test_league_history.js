@@ -129,6 +129,29 @@ async function run() {
     assert.strictEqual(localStorage.getItem('ff_league_history'), null, 'localStorage item deleted');
     console.log('   [PASS] clearHistory completely wiped list and storage');
 
+    // 8. Test initial load without query params (restoring last selected owner vs first alphabetical)
+    console.log('8. Testing initial site load auto-selects last owner (not first alphabetical)...');
+    app.saveOwnerForLeague('Sleeper', '1389343427119828992', '8');
+    
+    // Simulate brand new page load with no owner in URL or memory
+    const startupApp = {
+        platform: 'Sleeper',
+        sleeperLeagueId: '1389343427119828992',
+        ownerId: '',
+        pendingOwnerId: '',
+        owners: [
+            { id: '1', owner: 'Aaron Rodgers Fan' }, // alphabetically first
+            { id: '8', owner: 'Reidolph' },
+            { id: '12', owner: 'Zach Wilson' }
+        ],
+        ...createdApp.methods
+    };
+
+    startupApp.loadPreferences();
+    assert.strictEqual(startupApp.ownerId, '8', 'loadPreferences should restore last owner 8');
+    assert.strictEqual(startupApp.pendingOwnerId, '8', 'pendingOwnerId should be 8');
+    console.log('   [PASS] Initial load selected last user (8: Reidolph) instead of first alphabetical (1: Aaron Rodgers Fan)');
+
     console.log('\nALL LEAGUE HISTORY TESTS PASSED SUCCESSFULLY! [OK]');
 }
 
