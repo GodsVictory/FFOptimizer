@@ -862,17 +862,31 @@ var app = new Vue({
 
         onMatrixPlayerHover(player, event) {
             this.matrixHoverPlayer = player;
-            const container = event.currentTarget.closest('.matrix-chart-container');
+            const container = (event && event.currentTarget)
+                ? (event.currentTarget.closest('.matrix-chart-container') || event.currentTarget.closest('svg')?.parentElement || event.currentTarget.closest('div'))
+                : null;
             if (container) {
                 const rect = container.getBoundingClientRect();
+                const width = rect.width || 800;
                 let x = event.clientX - rect.left;
-                let y = event.clientY - rect.top - 12;
+                let y = event.clientY - rect.top;
+
+                // Clamp x within chart container bounds
                 if (x < 115) x = 115;
-                if (x > rect.width - 115) x = rect.width - 115;
-                if (y < 120) y = y + 130;
+                if (x > width - 115) x = width - 115;
+
+                // Smart vertical flip:
+                // If near the top (< 140px), place tooltip below the dot so it stays fully visible
+                // Otherwise place it above the dot
+                const isNearTop = y < 140;
+                const transform = isNearTop
+                    ? 'translate(-50%, 14px)'
+                    : 'translate(-50%, calc(-100% - 12px))';
+
                 this.matrixTooltipPos = {
                     left: `${x}px`,
-                    top: `${y}px`
+                    top: `${y}px`,
+                    transform: transform
                 };
             }
         },

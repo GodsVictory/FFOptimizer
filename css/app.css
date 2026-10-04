@@ -167,6 +167,10 @@
 }
 
 /* Matrix Chart SVG Elements */
+.matrix-chart-container {
+    position: relative;
+}
+
 .matrix-svg {
     width: 100%;
     height: 100%;
