@@ -450,3 +450,102 @@
     background-color: rgba(255, 255, 255, 0.5);
 }
 
+/* ==========================================================================
+   Lineup vs Waiver Matrix Chart Styles
+   ========================================================================== */
+.matrix-chart-box {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background-color: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.matrix-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.matrix-chart-container {
+    position: relative;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+}
+
+.matrix-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.quadrant-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.quadrant-studs {
+    fill: #059669;
+    opacity: 0.85;
+}
+
+.quadrant-stash {
+    fill: #4f46e5;
+    opacity: 0.85;
+}
+
+.quadrant-streamer {
+    fill: #d97706;
+    opacity: 0.85;
+}
+
+.quadrant-drop {
+    fill: #e11d48;
+    opacity: 0.85;
+}
+
+.axis-label {
+    font-size: 11px;
+    font-weight: 600;
+    fill: #64748b;
+    user-select: none;
+}
+
+.player-dot {
+    cursor: pointer;
+    transition: r 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease;
+}
+
+.player-dot:hover {
+    r: 9.5 !important;
+    filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
+}
+
+.matrix-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background-color: #0f172a;
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    border: 1px solid #334155;
+    min-width: 210px;
+    transform: translate(-50%, -100%);
+    transition: transform 0.08s ease;
+}
+
+.quadrant-card {
+    border-radius: 8px;
+    height: 100%;
+}
+
+

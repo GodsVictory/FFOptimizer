@@ -270,6 +270,246 @@
                 <div v-if="ready && lineupReady">
                     <hr>
                     
+                    <!-- Lineup vs Waiver Value & Volatility Matrix Card -->
+                    <div class="box matrix-chart-box mb-5" v-if="matrixChartData">
+                        <div class="matrix-header is-flex is-justify-content-between is-align-items-center mb-3 pb-2" style="border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <h2 class="title is-5 mb-1 is-flex is-align-items-center" style="gap: 0.5rem;">
+                                    <span>Lineup vs. Waiver Value & Volatility Matrix</span>
+                                    <span class="tag is-info is-light is-rounded has-text-weight-bold is-size-7">2D Visualizer</span>
+                                </h2>
+                                <p class="subtitle is-7 has-text-grey mb-0">
+                                    Weekly Value vs. Rest of Season (ROS) Value with Expert Disagreement Whiskers
+                                </p>
+                            </div>
+
+                            <!-- Controls: Position Tabs & Axis Toggle & Collapse -->
+                            <div class="is-flex is-align-items-center" style="flex-wrap: wrap; gap: 0.5rem;">
+                                <!-- Position Tabs -->
+                                <div class="buttons has-addons are-small mb-0">
+                                    <button v-for="pos in ['ALL', 'QB', 'RB', 'WR', 'TE', 'DST']" :key="pos"
+                                            class="button"
+                                            :class="{'is-black has-text-weight-bold': matrixPos === pos}"
+                                            @click="setMatrixPos(pos)">{{ pos }}</button>
+                                </div>
+
+                                <!-- Axis Toggle -->
+                                <div class="buttons has-addons are-small mb-0">
+                                    <button class="button"
+                                            :class="{'is-black has-text-weight-bold': matrixXMode === 'rank'}"
+                                            @click="setMatrixXMode('rank')">Weekly Rank</button>
+                                    <button class="button"
+                                            :class="{'is-black has-text-weight-bold': matrixXMode === 'pts'}"
+                                            @click="setMatrixXMode('pts')">Projected Pts</button>
+                                </div>
+
+                                <!-- Collapse / Expand Button -->
+                                <button class="button is-small is-light" @click="showMatrixChart = !showMatrixChart" :title="showMatrixChart ? 'Collapse Matrix' : 'Expand Matrix'">
+                                    <span v-if="showMatrixChart">&#9650; Hide</span>
+                                    <span v-else>&#9660; Show Matrix</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Collapsible Body -->
+                        <div v-show="showMatrixChart">
+                            <!-- Legend Bar -->
+                            <div class="matrix-legend is-flex is-justify-content-between is-align-items-center mb-2 px-1 is-size-7 has-text-grey" style="flex-wrap: wrap; gap: 0.5rem;">
+                                <div class="is-flex is-align-items-center" style="gap: 1rem; flex-wrap: wrap;">
+                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
+                                        <span class="matrix-legend-dot" style="background-color: #10b981;"></span>
+                                        <span class="has-text-weight-medium">Suggested Pickup</span>
+                                    </div>
+                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
+                                        <span class="matrix-legend-dot" style="background-color: #f43f5e;"></span>
+                                        <span class="has-text-weight-medium">Suggested Drop</span>
+                                    </div>
+                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
+                                        <span class="matrix-legend-dot" style="background-color: #3b82f6;"></span>
+                                        <span class="has-text-weight-medium">My Roster</span>
+                                    </div>
+                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
+                                        <span class="matrix-legend-dot" style="background-color: #94a3b8;"></span>
+                                        <span class="has-text-weight-medium">Free Agent</span>
+                                    </div>
+                                </div>
+                                <div class="is-size-7 has-text-grey-light is-italic is-hidden-mobile">
+                                    <span style="display: inline-block; width: 14px; height: 2px; background-color: #94a3b8; vertical-align: middle; margin-right: 4px;"></span>
+                                    <span>Horizontal Whisker = Expert Min ↔ Max Spread (Floor / Ceiling)</span>
+                                </div>
+                            </div>
+
+                            <!-- SVG Chart Container -->
+                            <div class="matrix-chart-container">
+                                <svg class="matrix-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                                    <defs>
+                                        <marker id="matrix-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981"/>
+                                        </marker>
+                                    </defs>
+
+                                    <!-- 1. Quadrants Background & Labels -->
+                                    <g class="quadrants-group">
+                                        <!-- Top Right: Elite Studs -->
+                                        <rect :x="matrixChartData.midX" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#10b981" fill-opacity="0.04" />
+                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + 20" text-anchor="end" class="quadrant-label quadrant-studs">★ Elite Studs (Must Start)</text>
+
+                                        <!-- Top Left: High-Upside Stash -->
+                                        <rect :x="matrixChartData.margin.left" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#6366f1" fill-opacity="0.04" />
+                                        <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + 20" text-anchor="start" class="quadrant-label quadrant-stash">✦ Upside Stashes (Hold)</text>
+
+                                        <!-- Bottom Right: Streamer Gold -->
+                                        <rect :x="matrixChartData.midX" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f59e0b" fill-opacity="0.04" />
+                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="end" class="quadrant-label quadrant-streamer">⚡ Streamer Gold (Target)</text>
+
+                                        <!-- Bottom Left: Drop Candidates -->
+                                        <rect :x="matrixChartData.margin.left" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f43f5e" fill-opacity="0.04" />
+                                        <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="start" class="quadrant-label quadrant-drop">✕ Roster Clutter (Drop)</text>
+
+                                        <!-- Crosshair Dividing Lines -->
+                                        <line :x1="matrixChartData.midX" :y1="matrixChartData.margin.top" :x2="matrixChartData.midX" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.midY" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.midY" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+
+                                        <!-- Diagonal Equality Vector (Rank mode only) -->
+                                        <line v-if="matrixChartData.isRankMode"
+                                              :x1="matrixChartData.margin.left + matrixChartData.plotWidth" :y1="matrixChartData.margin.top"
+                                              :x2="matrixChartData.margin.left" :y2="matrixChartData.margin.top + matrixChartData.plotHeight"
+                                              stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                                    </g>
+
+                                    <!-- 2. Axes Lines & Labels -->
+                                    <g class="axes-group">
+                                        <!-- X Axis -->
+                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.height - matrixChartData.margin.bottom" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth / 2" :y="matrixChartData.height - 15" text-anchor="middle" class="axis-label">
+                                            {{ matrixChartData.isRankMode ? '◄ Worse Weekly Rank (#' + matrixChartData.maxRank + ') ─── WEEKLY VALUE ─── Better Weekly Rank (#1) ►' : '◄ Lower Points (' + matrixChartData.minPts + ' pts) ─── PROJECTED WEEKLY POINTS ─── Higher Points (' + matrixChartData.maxPts + '+ pts) ►' }}
+                                        </text>
+
+                                        <!-- Y Axis -->
+                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.margin.top" :x2="matrixChartData.margin.left" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <text :x="18" :y="matrixChartData.margin.top + matrixChartData.plotHeight / 2" text-anchor="middle" :transform="'rotate(-90, 18, ' + (matrixChartData.margin.top + matrixChartData.plotHeight / 2) + ')'" class="axis-label">
+                                            ◄ Worse ROS Rank (#{{ matrixChartData.maxRank }}) ─── REST OF SEASON VALUE ─── Better ROS Rank (#1) ►
+                                        </text>
+                                    </g>
+
+                                    <!-- 3. Upgrade Vector Lines (Drop -> Pickup) -->
+                                    <g class="upgrade-vectors-group">
+                                        <line v-for="(v, vIdx) in matrixChartData.upgradeVectors" :key="'vec-' + vIdx"
+                                              :x1="v.x1" :y1="v.y1" :x2="v.x2" :y2="v.y2"
+                                              stroke="#10b981" stroke-width="2.5" stroke-dasharray="5,4"
+                                              marker-end="url(#matrix-arrow)" opacity="0.85" />
+                                    </g>
+
+                                    <!-- 4. Whiskers (Min Rank <-> Max Rank Spread) -->
+                                    <g class="whiskers-group" v-if="matrixChartData.isRankMode">
+                                        <template v-for="(p, pIdx) in matrixChartData.players">
+                                            <g v-if="p.whisker" :key="'whisk-' + pIdx">
+                                                <line :x1="p.whisker.x1" :y1="p.whisker.y" :x2="p.whisker.x2" :y2="p.whisker.y"
+                                                      :stroke="p.whisker.strokeColor" stroke-width="2" stroke-linecap="round" :opacity="p.whisker.opacity" />
+                                                <!-- End caps -->
+                                                <line :x1="p.whisker.x1" :y1="p.whisker.y - 3" :x2="p.whisker.x1" :y2="p.whisker.y + 3"
+                                                      :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
+                                                <line :x1="p.whisker.x2" :y1="p.whisker.y - 3" :x2="p.whisker.x2" :y2="p.whisker.y + 3"
+                                                      :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
+                                            </g>
+                                        </template>
+                                    </g>
+
+                                    <!-- 5. Player Circles & Text Labels -->
+                                    <g class="players-group">
+                                        <template v-for="(p, pIdx) in matrixChartData.players">
+                                            <!-- Player Circle -->
+                                            <circle :key="'dot-' + pIdx"
+                                                    :cx="p.cx" :cy="p.cy" :r="p.radius"
+                                                    :fill="p.dotColor" stroke="#ffffff" stroke-width="2"
+                                                    class="player-dot"
+                                                    @mouseenter="onMatrixPlayerHover(p, $event)"
+                                                    @mouseleave="onMatrixPlayerLeave" />
+
+                                            <!-- Text Label (for key players) -->
+                                            <text v-if="p.label" :key="'label-' + pIdx"
+                                                  :x="p.label.x" :y="p.label.y"
+                                                  :text-anchor="p.label.anchor"
+                                                  font-size="10" font-weight="700"
+                                                  :fill="p.label.color"
+                                                  style="pointer-events: none; user-select: none;">
+                                                {{ p.label.text }}
+                                            </text>
+                                        </template>
+                                    </g>
+                                </svg>
+
+                                <!-- Floating Tooltip -->
+                                <div class="matrix-tooltip" v-if="matrixHoverPlayer" :style="matrixTooltipPos">
+                                    <div class="matrix-tooltip-header is-flex is-justify-content-between is-align-items-center mb-1 pb-1" style="border-bottom: 1px solid rgba(255,255,255,0.15);">
+                                        <span class="has-text-weight-bold has-text-white is-size-6">{{ matrixHoverPlayer.name }}</span>
+                                        <span class="tag is-small is-rounded is-uppercase has-text-weight-bold"
+                                              :class="{
+                                                  'is-success': matrixHoverPlayer.status === 'pickup',
+                                                  'is-danger': matrixHoverPlayer.status === 'drop',
+                                                  'is-info': matrixHoverPlayer.status === 'roster',
+                                                  'is-light': matrixHoverPlayer.status === 'wire'
+                                              }">{{ matrixHoverPlayer.status }}</span>
+                                    </div>
+                                    <div class="matrix-tooltip-body is-size-7">
+                                        <div class="is-flex is-justify-content-between mb-1">
+                                            <span class="has-text-grey-light">Pos & Team:</span>
+                                            <span class="has-text-weight-semibold has-text-white">{{ matrixHoverPlayer.pos }} • {{ matrixHoverPlayer.team || 'FA' }}</span>
+                                        </div>
+                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.opp">
+                                            <span class="has-text-grey-light">Matchup:</span>
+                                            <span class="has-text-weight-semibold has-text-white">{{ matrixHoverPlayer.opp }}</span>
+                                        </div>
+                                        <div class="is-flex is-justify-content-between mb-1">
+                                            <span class="has-text-grey-light">Weekly ECR:</span>
+                                            <span class="has-text-weight-bold has-text-success-light">#{{ matrixHoverPlayer.weekRank || '-' }}</span>
+                                        </div>
+                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.minRank && matrixHoverPlayer.maxRank">
+                                            <span class="has-text-grey-light">Expert Range:</span>
+                                            <span class="has-text-weight-semibold has-text-warning-light">#{{ matrixHoverPlayer.minRank }} - #{{ matrixHoverPlayer.maxRank }} {{ matrixHoverPlayer.stdDev ? '(±' + matrixHoverPlayer.stdDev + ')' : '' }}</span>
+                                        </div>
+                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.displayPts">
+                                            <span class="has-text-grey-light">Projected Pts:</span>
+                                            <span class="has-text-weight-bold has-text-info-light">{{ matrixHoverPlayer.displayPts }} pts</span>
+                                        </div>
+                                        <div class="is-flex is-justify-content-between">
+                                            <span class="has-text-grey-light">Rest of Season:</span>
+                                            <span class="has-text-weight-bold has-text-primary-light">#{{ matrixHoverPlayer.rosRank || '-' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quadrant Explanatory Footer Cards -->
+                            <div class="columns is-mobile is-multiline mt-3">
+                                <div class="column is-6-mobile is-3-tablet">
+                                    <div class="quadrant-card p-2 rounded has-background-success-light" style="border: 1px solid #bbf7d0;">
+                                        <div class="has-text-weight-bold is-size-7 has-text-success-dark text-uppercase">Top Right: Elite Studs</div>
+                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">High weekly output + High ROS equity. Must-start cornerstone players.</p>
+                                    </div>
+                                </div>
+                                <div class="column is-6-mobile is-3-tablet">
+                                    <div class="quadrant-card p-2 rounded has-background-info-light" style="border: 1px solid #bfdbfe;">
+                                        <div class="has-text-weight-bold is-size-7 has-text-info-dark text-uppercase">Top Left: Upside Stash</div>
+                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Lower current week (bye/injury) but top ROS value. DO NOT DROP.</p>
+                                    </div>
+                                </div>
+                                <div class="column is-6-mobile is-3-tablet">
+                                    <div class="quadrant-card p-2 rounded has-background-warning-light" style="border: 1px solid #fde68a;">
+                                        <div class="has-text-weight-bold is-size-7 has-text-warning-dark text-uppercase">Bottom Right: Streamer Gold</div>
+                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Prime weekly matchup despite modest ROS rank. Prime waiver pickup.</p>
+                                    </div>
+                                </div>
+                                <div class="column is-6-mobile is-3-tablet">
+                                    <div class="quadrant-card p-2 rounded has-background-danger-light" style="border: 1px solid #fecdd3;">
+                                        <div class="has-text-weight-bold is-size-7 has-text-danger-dark text-uppercase">Bottom Left: Drop Candidates</div>
+                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Low weekly output & modest ROS outlook. Safe to churn for upgrades.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="columns">
                         <!-- LEFT COLUMN: Lineup, Bench, and Drop in the same card -->
                         <div class="column is-narrow lineup-column">

@@ -43,7 +43,14 @@ var app = new Vue({
             week: '',
             lastUpdatedAt: '',
             lastPlatform: '',
-            leagueHistory: []
+            leagueHistory: [],
+
+            // Matrix Chart state
+            matrixPos: 'ALL',
+            matrixXMode: 'rank', // 'rank' or 'pts'
+            matrixHoverPlayer: null,
+            matrixTooltipPos: { left: '0px', top: '0px' },
+            showMatrixChart: true
         };
     },
 
@@ -53,6 +60,252 @@ var app = new Vue({
         },
         dropPlayers() {
             return (this.fullBench || []).filter(p => p.highlight === 'drop');
+        },
+        matrixChartData() {
+            if (!this.lineupReady || !this.ownerId) return null;
+
+            const currentPos = this.matrixPos;
+            const isRankMode = this.matrixXMode === 'rank';
+
+            // 1. Gather all candidates
+            const starters = (this.optimalLineup || []).filter(p => p.name && p.name !== '(Empty Slot)');
+            const bench = this.benchPlayers || [];
+            const drops = this.dropPlayers || [];
+            const pickups = starters.filter(p => p.highlight === 'pickup');
+
+            // Free agents from this.allRankedPlayers
+            const matcher = (typeof PlayerMatcher !== 'undefined') ? PlayerMatcher : null;
+            const normFn = name => matcher ? matcher.normalizeName(name) : (name || '').toLowerCase().trim();
+
+            const pickupNames = new Set(pickups.map(p => normFn(p.name)));
+            const allFreeAgents = (this.allRankedPlayers || []).filter(p => 
+                p.onRoster === 0 && 
+                p.rank > 0 && 
+                !pickupNames.has(normFn(p.name))
+            );
+
+            let selectedFreeAgents = [];
+            if (currentPos === 'ALL') {
+                const positions = ['QB', 'RB', 'WR', 'TE', 'DST'];
+                for (const pos of positions) {
+                    const topForPos = allFreeAgents
+                        .filter(p => p.position === pos)
+                        .sort((a, b) => a.rank - b.rank)
+                        .slice(0, 4);
+                    selectedFreeAgents.push(...topForPos);
+                }
+            } else {
+                selectedFreeAgents = allFreeAgents
+                    .filter(p => p.position === currentPos)
+                    .sort((a, b) => a.rank - b.rank)
+                    .slice(0, 15);
+            }
+
+            const playerMap = new Map();
+
+            const addPlayer = (p, status, extra = {}) => {
+                if (!p || !p.name || p.name === '(Empty Slot)') return;
+                const norm = normFn(p.name);
+                
+                const full = (this.allRankedPlayers || []).find(ap => normFn(ap.name) === norm) || p;
+                const pos = full.position || p.position || p.slot;
+
+                if (currentPos !== 'ALL' && pos !== currentPos) return;
+
+                const weekRank = (pos === 'FLX' && full.flxRank > 0) 
+                    ? full.flxRank 
+                    : (full.rank > 0 ? full.rank : (p.rank > 0 ? p.rank : null));
+                const rosRank = (full.rosRank > 0) 
+                    ? full.rosRank 
+                    : (pos === 'FLX' && full.rosFlxRank > 0 ? full.rosFlxRank : null);
+
+                if (!playerMap.has(norm)) {
+                    playerMap.set(norm, {
+                        id: full.id || p.id,
+                        name: p.name || full.name,
+                        pos: pos,
+                        team: full.team || p.team || '',
+                        opp: full.opp || p.opp || '',
+                        weekRank: weekRank,
+                        minRank: full.minRank != null ? full.minRank : (weekRank != null ? Math.max(1, weekRank - 3) : null),
+                        maxRank: full.maxRank != null ? full.maxRank : (weekRank != null ? weekRank + 5 : null),
+                        stdDev: full.stdDev != null ? full.stdDev : null,
+                        pts: full.pts != null ? full.pts : null,
+                        rosRank: rosRank,
+                        status: status,
+                        targetDrop: extra.targetDrop || p.targetDrop || null,
+                        targetPickup: extra.targetPickup || p.targetPickup || null
+                    });
+                }
+            };
+
+            pickups.forEach(p => addPlayer(p, 'pickup', { targetDrop: p.targetDrop }));
+            drops.forEach(p => addPlayer(p, 'drop', { targetPickup: p.targetPickup }));
+            starters.filter(p => p.highlight !== 'pickup').forEach(p => addPlayer(p, 'roster'));
+            bench.forEach(p => addPlayer(p, 'roster'));
+            selectedFreeAgents.forEach(p => addPlayer(p, 'wire'));
+
+            const rawList = Array.from(playerMap.values());
+            if (rawList.length === 0) return null;
+
+            const width = 800;
+            const height = 500;
+            const margin = { top: 40, right: 45, bottom: 50, left: 65 };
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            const minRank = 1;
+            let maxRank = 50;
+            if (currentPos === 'QB' || currentPos === 'DST' || currentPos === 'K' || currentPos === 'TE') {
+                maxRank = 32;
+            } else if (currentPos === 'ALL') {
+                maxRank = 50;
+            }
+
+            let minPts = 4.0;
+            let maxPts = 24.0;
+            if (currentPos === 'QB') {
+                minPts = 10.0;
+                maxPts = 28.0;
+            } else if (currentPos === 'DST' || currentPos === 'K') {
+                minPts = 3.0;
+                maxPts = 14.0;
+            }
+
+            const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+            const xScale = val => {
+                if (isRankMode) {
+                    const safe = clamp(val != null && val > 0 ? val : maxRank, minRank, maxRank);
+                    return margin.left + ((maxRank - safe) / (maxRank - minRank)) * plotWidth;
+                } else {
+                    const safe = clamp(val != null ? val : minPts, minPts, maxPts);
+                    return margin.left + ((safe - minPts) / (maxPts - minPts)) * plotWidth;
+                }
+            };
+
+            const yScale = ros => {
+                const safe = clamp(ros != null && ros > 0 ? ros : maxRank, minRank, maxRank);
+                return margin.top + ((safe - minRank) / (maxRank - minRank)) * plotHeight;
+            };
+
+            const midX = margin.left + plotWidth / 2;
+            const midY = margin.top + plotHeight / 2;
+
+            const plottedPlayers = rawList.map(p => {
+                let displayPts = p.pts;
+                if (displayPts == null && p.weekRank) {
+                    if (p.pos === 'QB') displayPts = Math.max(10, +(26 - p.weekRank * 0.45).toFixed(1));
+                    else if (p.pos === 'DST' || p.pos === 'K') displayPts = Math.max(3, +(12 - p.weekRank * 0.28).toFixed(1));
+                    else displayPts = Math.max(4, +(22 - p.weekRank * 0.35).toFixed(1));
+                }
+
+                const cx = xScale(isRankMode ? p.weekRank : displayPts);
+                const effRos = p.rosRank != null && p.rosRank > 0 ? p.rosRank : (p.weekRank != null ? p.weekRank : maxRank);
+                const cy = yScale(effRos);
+
+                let dotColor = '#94a3b8';
+                let strokeColor = '#64748b';
+                let radius = 5.5;
+
+                if (p.status === 'pickup') {
+                    dotColor = '#10b981';
+                    strokeColor = '#059669';
+                    radius = 8;
+                } else if (p.status === 'drop') {
+                    dotColor = '#f43f5e';
+                    strokeColor = '#e11d48';
+                    radius = 7.5;
+                } else if (p.status === 'roster') {
+                    dotColor = '#3b82f6';
+                    strokeColor = '#2563eb';
+                    radius = 6.5;
+                }
+
+                let whisker = null;
+                if (isRankMode && p.minRank && p.maxRank) {
+                    const xMin = xScale(p.minRank);
+                    const xMax = xScale(p.maxRank);
+                    whisker = {
+                        x1: Math.min(xMin, xMax),
+                        x2: Math.max(xMin, xMax),
+                        y: cy,
+                        strokeColor: strokeColor,
+                        opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
+                    };
+                }
+
+                let label = null;
+                if (p.status === 'pickup' || p.status === 'drop' || (p.status === 'roster' && (p.weekRank <= 3 || p.rosRank <= 3))) {
+                    const lastName = p.name.split(' ').pop();
+                    const isPickup = (p.status === 'pickup');
+                    label = {
+                        text: lastName,
+                        x: cx + (isPickup ? 11 : -11),
+                        y: cy + 4,
+                        anchor: isPickup ? 'start' : 'end',
+                        color: isPickup ? '#059669' : (p.status === 'drop' ? '#e11d48' : '#2563eb')
+                    };
+                }
+
+                return {
+                    ...p,
+                    displayPts: displayPts,
+                    effRos: effRos,
+                    cx: cx,
+                    cy: cy,
+                    dotColor: dotColor,
+                    strokeColor: strokeColor,
+                    radius: radius,
+                    whisker: whisker,
+                    label: label
+                };
+            });
+
+            const upgradeVectors = [];
+            plottedPlayers.filter(p => p.status === 'pickup' && p.targetDrop).forEach(pk => {
+                const dropPlayer = plottedPlayers.find(p => p.name === pk.targetDrop);
+                if (dropPlayer) {
+                    upgradeVectors.push({
+                        x1: dropPlayer.cx,
+                        y1: dropPlayer.cy,
+                        x2: pk.cx,
+                        y2: pk.cy,
+                        dropName: dropPlayer.name,
+                        pickupName: pk.name
+                    });
+                }
+            });
+            plottedPlayers.filter(p => p.status === 'drop' && p.targetPickup && !upgradeVectors.some(v => v.dropName === p.name)).forEach(dp => {
+                const pkPlayer = plottedPlayers.find(p => p.name === dp.targetPickup);
+                if (pkPlayer) {
+                    upgradeVectors.push({
+                        x1: dp.cx,
+                        y1: dp.cy,
+                        x2: pkPlayer.cx,
+                        y2: pkPlayer.cy,
+                        dropName: dp.name,
+                        pickupName: pkPlayer.name
+                    });
+                }
+            });
+
+            return {
+                width,
+                height,
+                margin,
+                plotWidth,
+                plotHeight,
+                midX,
+                midY,
+                minRank,
+                maxRank,
+                minPts,
+                maxPts,
+                isRankMode,
+                players: plottedPlayers,
+                upgradeVectors: upgradeVectors
+            };
         }
     },
 
@@ -402,6 +655,12 @@ var app = new Vue({
             for (const p of this.rosteredPlayers) {
                 p.rank = -1;
                 p.flxRank = -1;
+                p.rosRank = -1;
+                p.rosFlxRank = -1;
+                p.minRank = null;
+                p.maxRank = null;
+                p.stdDev = null;
+                p.pts = null;
             }
 
             const unrosteredMap = new Map();
@@ -416,8 +675,15 @@ var app = new Vue({
                     if (matchedRosterPlayer) {
                         if (isFlex) {
                             matchedRosterPlayer.flxRank = fpPlayer.rank;
+                            if (matchedRosterPlayer.pts == null && fpPlayer.pts != null) matchedRosterPlayer.pts = fpPlayer.pts;
                         } else {
                             matchedRosterPlayer.rank = fpPlayer.rank;
+                            matchedRosterPlayer.minRank = fpPlayer.minRank != null ? fpPlayer.minRank : null;
+                            matchedRosterPlayer.maxRank = fpPlayer.maxRank != null ? fpPlayer.maxRank : null;
+                            matchedRosterPlayer.stdDev = fpPlayer.stdDev != null ? fpPlayer.stdDev : null;
+                            matchedRosterPlayer.pts = fpPlayer.pts != null ? fpPlayer.pts : null;
+                            if (fpPlayer.team) matchedRosterPlayer.team = fpPlayer.team;
+                            if (fpPlayer.opp) matchedRosterPlayer.opp = fpPlayer.opp;
                         }
                     } else {
                         // Unrostered ranked player - deduplicate across position & FLX rankings
@@ -434,15 +700,30 @@ var app = new Vue({
                                 onRoster: 0,
                                 starter: false,
                                 rank: -1,
-                                flxRank: -1
+                                flxRank: -1,
+                                rosRank: -1,
+                                rosFlxRank: -1,
+                                minRank: fpPlayer.minRank != null ? fpPlayer.minRank : null,
+                                maxRank: fpPlayer.maxRank != null ? fpPlayer.maxRank : null,
+                                stdDev: fpPlayer.stdDev != null ? fpPlayer.stdDev : null,
+                                pts: fpPlayer.pts != null ? fpPlayer.pts : null,
+                                team: fpPlayer.team || '',
+                                opp: fpPlayer.opp || ''
                             };
                             unrosteredMap.set(key, entry);
                         }
 
                         if (isFlex) {
                             entry.flxRank = fpPlayer.rank;
+                            if (entry.pts == null && fpPlayer.pts != null) entry.pts = fpPlayer.pts;
                         } else {
                             entry.rank = fpPlayer.rank;
+                            if (fpPlayer.minRank != null) entry.minRank = fpPlayer.minRank;
+                            if (fpPlayer.maxRank != null) entry.maxRank = fpPlayer.maxRank;
+                            if (fpPlayer.stdDev != null) entry.stdDev = fpPlayer.stdDev;
+                            if (fpPlayer.pts != null) entry.pts = fpPlayer.pts;
+                            if (fpPlayer.team) entry.team = fpPlayer.team;
+                            if (fpPlayer.opp) entry.opp = fpPlayer.opp;
                             if (playerPos !== 'FLX') {
                                 entry.position = playerPos;
                             }
@@ -464,6 +745,7 @@ var app = new Vue({
                 flxRank: -1
             }));
             const rosIndex = PlayerMatcher.createIndex(rosRoster);
+            const weeklyIndex = PlayerMatcher.createIndex(this.allRankedPlayers);
             const rosUnrosteredMap = new Map();
 
             for (const [pos, playerList] of Object.entries(rosData)) {
@@ -506,10 +788,51 @@ var app = new Vue({
                             }
                         }
                     }
+
+                    // Attach ROS rank to matched player in allRankedPlayers (for matrix chart)
+                    const matchedWeekly = weeklyIndex.find(fpPlayer.name, pos);
+                    if (matchedWeekly) {
+                        if (isFlex) {
+                            matchedWeekly.rosFlxRank = fpPlayer.rank;
+                        } else {
+                            matchedWeekly.rosRank = fpPlayer.rank;
+                            if (!matchedWeekly.team && fpPlayer.team) matchedWeekly.team = fpPlayer.team;
+                            if (!matchedWeekly.opp && fpPlayer.opp) matchedWeekly.opp = fpPlayer.opp;
+                        }
+                    }
                 }
             }
 
             this.allRosRankedPlayers = [...rosRoster, ...rosUnrosteredMap.values()];
+        },
+
+        setMatrixPos(pos) {
+            this.matrixPos = pos;
+        },
+
+        setMatrixXMode(mode) {
+            this.matrixXMode = mode;
+        },
+
+        onMatrixPlayerHover(player, event) {
+            this.matrixHoverPlayer = player;
+            const container = event.currentTarget.closest('.matrix-chart-container');
+            if (container) {
+                const rect = container.getBoundingClientRect();
+                let x = event.clientX - rect.left;
+                let y = event.clientY - rect.top - 12;
+                if (x < 115) x = 115;
+                if (x > rect.width - 115) x = rect.width - 115;
+                if (y < 120) y = y + 130;
+                this.matrixTooltipPos = {
+                    left: `${x}px`,
+                    top: `${y}px`
+                };
+            }
+        },
+
+        onMatrixPlayerLeave() {
+            this.matrixHoverPlayer = null;
         },
 
         /**

@@ -190,9 +190,15 @@ const OptimizerService = {
             );
 
             let isDrop = false;
+            let targetPickup = null;
             if (tokenIndex !== -1) {
                 isDrop = true;
-                dropTokens.splice(tokenIndex, 1);
+                const pk = dropTokens.splice(tokenIndex, 1)[0];
+                targetPickup = pk.name;
+                const optMatch = optimalLineup.find(o => o.name === pk.name);
+                if (optMatch) {
+                    optMatch.targetDrop = p.name;
+                }
             }
 
             fullBench.push({
@@ -204,6 +210,7 @@ const OptimizerService = {
                 starter: true,
                 highlight: isDrop ? 'drop' : 'bench',
                 badge: isDrop ? 'DROP' : 'BENCH',
+                targetPickup: targetPickup,
                 backgroundColor: isDrop ? '#fef2f2' : '#fde8e8'
             });
         }

@@ -135,7 +135,13 @@ const FantasyProsService = {
             name: p.player_name || '',
             position: p.player_position_id || pos,
             id: playerId || false,
-            rank: typeof p.rank_ecr === 'number' ? p.rank_ecr : (parseInt(p.rank_ecr, 10) || -1)
+            rank: typeof p.rank_ecr === 'number' ? p.rank_ecr : (parseInt(p.rank_ecr, 10) || -1),
+            minRank: p.rank_min ? parseInt(p.rank_min, 10) : null,
+            maxRank: p.rank_max ? parseInt(p.rank_max, 10) : null,
+            stdDev: p.rank_std ? parseFloat(p.rank_std) : null,
+            pts: p.r2p_pts ? parseFloat(p.r2p_pts) : null,
+            team: p.player_team_id || '',
+            opp: p.player_opponent || ''
         };
     },
 
