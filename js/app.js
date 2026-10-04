@@ -177,7 +177,6 @@ var app = new Vue({
             const plotWidth = width - margin.left - margin.right;
             const plotHeight = height - margin.top - margin.bottom;
 
-            const isRankMode = this.matrixXMode === 'rank';
             const isClusterZoom = this.matrixZoom === 'cluster';
 
             // 1. Gather display points and effective ROS rank for all candidates
