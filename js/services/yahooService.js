@@ -130,11 +130,17 @@ const YahooService = {
             ? startingSlots 
             : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'];
 
+        let detectedFlex = 'WRT';
+        if (text.includes('W/R') && !text.includes('W/R/T')) {
+            detectedFlex = 'WR';
+        }
+
         return {
             leagueName: 'Yahoo Roster',
             startingSlots: finalStartingSlots,
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
-            rosteredPlayers
+            rosteredPlayers,
+            flex: detectedFlex
         };
     },
 
@@ -208,11 +214,17 @@ const YahooService = {
             return this._parseRawText(doc.body.textContent);
         }
 
+        let detectedFlex = 'WRT';
+        if (html.includes('W/R') && !html.includes('W/R/T')) {
+            detectedFlex = 'WR';
+        }
+
         return {
             leagueName: 'Yahoo Roster',
             startingSlots: startingSlots.length > 0 ? startingSlots : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'],
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
-            rosteredPlayers
+            rosteredPlayers,
+            flex: detectedFlex
         };
     },
 
@@ -358,11 +370,40 @@ const YahooService = {
             console.error('Error parsing Yahoo API JSON:', e);
         }
 
+        let detectedFlex = 'WRT';
+        let detectedScoring = 'STD';
+
+        try {
+            const settingsObj = settingsJson.fantasy_content && settingsJson.fantasy_content.league && settingsJson.fantasy_content.league[1] && settingsJson.fantasy_content.league[1].settings;
+            if (settingsObj && settingsObj[0]) {
+                const statMods = settingsObj[0].stat_modifiers && settingsObj[0].stat_modifiers.stats && settingsObj[0].stat_modifiers.stats.stat;
+                if (Array.isArray(statMods)) {
+                    // Stat 11 is Receptions in Yahoo
+                    const recStat = statMods.find(s => s.stat_id == 11 || (s.stat && s.stat.stat_id == 11));
+                    const recVal = recStat ? parseFloat(recStat.value || (recStat.stat && recStat.stat.value)) : 0;
+                    if (recVal >= 0.75) detectedScoring = 'PPR';
+                    else if (recVal >= 0.25) detectedScoring = 'HALF';
+                    else detectedScoring = 'STD';
+                }
+
+                const rosterPositions = settingsObj[0].roster_positions;
+                if (Array.isArray(rosterPositions)) {
+                    const hasWrFlex = rosterPositions.some(p => p.roster_position && p.roster_position.position === 'W/R');
+                    const hasWrtFlex = rosterPositions.some(p => p.roster_position && p.roster_position.position === 'W/R/T');
+                    if (hasWrFlex && !hasWrtFlex) {
+                        detectedFlex = 'WR';
+                    }
+                }
+            }
+        } catch (e) {}
+
         return {
             leagueName: leagueName || 'Yahoo League',
             startingSlots: startingSlots.length > 0 ? startingSlots : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'],
             owners,
-            rosteredPlayers
+            rosteredPlayers,
+            scoring: detectedScoring,
+            flex: detectedFlex
         };
     }
 };

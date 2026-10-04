@@ -1,80 +1,6 @@
-/* FF Optimizer Stylesheet */
+/* FF Optimizer Custom Stylesheet */
 
-:root {
-    --starter-color: #e8f4fd;
-    --starter-border: #b6e0fe;
-    --bench-color: #fde8e8;
-    --bench-border: #f8b4b4;
-    --accent-color: #121212;
-}
-
-.noselect {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-/* Header brand */
-.brand-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 1.5rem;
-    font-weight: bold;
-    line-height: 1.1;
-}
-
-.brand-title img {
-    height: 32px;
-    width: 32px;
-}
-
-/* Platform & scoring controls */
-.control-box {
-    margin-bottom: 1.5rem;
-}
-
-.control-group {
-    margin: 0 auto;
-    max-width: 140px;
-}
-
-.control-group .label {
-    margin-bottom: 0.25rem;
-    text-align: center;
-}
-
-.radio-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.radio-label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-}
-
-/* Column sizing */
-.lineup-column {
-    width: 275px;
-    min-width: 260px;
-    max-width: 290px;
-}
-
-@media screen and (max-width: 768px) {
-    .lineup-column {
-        width: 100%;
-        max-width: 100%;
-    }
-}
-
-/* Roster / Lineup table styling */
+/* Table Styling */
 .lineup-table {
     width: 100%;
     border-collapse: separate;
@@ -83,111 +9,25 @@
 }
 
 .lineup-table td {
-    padding: 6px 6px;
+    padding: 6px 8px;
     vertical-align: middle;
-}
-
-/* Position Rankings table styling - auto sizes based on content */
-.rankings-table {
-    border-collapse: separate;
-    border-spacing: 0 4px;
-}
-
-.rankings-table td {
-    padding: 5px 8px;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-
-.lineup-table tr.pickup-rec {
-    background-color: #ecfdf5;
-    border-left: 4px solid #10b981;
-    font-weight: 600;
-}
-
-.lineup-table tr.pickup-rec .pos-cell {
-    color: #065f46;
-}
-
-.lineup-table tr.pickup-rec .name-cell {
-    color: #065f46;
-}
-
-.lineup-table tr.pickup-rec .rank-cell {
-    color: #059669;
-}
-
-.lineup-table tr.start-rec {
-    background-color: var(--starter-color);
-    border-left: 4px solid #3273dc;
-    font-weight: 600;
-}
-
-.lineup-table tr.start-rec .pos-cell {
-    color: #1e3a8a;
-}
-
-.lineup-table tr.start-rec .name-cell {
-    color: #1e3a8a;
-}
-
-.lineup-table tr.start-rec .rank-cell {
-    color: #1d4ed8;
-}
-
-.lineup-table tr.drop-rec {
-    background-color: #fef2f2;
-    border-left: 4px solid #ef4444;
-    font-weight: 600;
-}
-
-.lineup-table tr.drop-rec .pos-cell {
-    color: #991b1b;
-}
-
-.lineup-table tr.drop-rec .name-cell {
-    color: #991b1b;
-}
-
-.lineup-table tr.drop-rec .rank-cell {
-    color: #b91c1c;
-}
-
-.lineup-table tr.bench-rec {
-    background-color: var(--bench-color);
-    border-left: 4px solid #f14668;
-    color: #9b1c1c;
-}
-
-.lineup-table tr.bench-rec .pos-cell {
-    color: #9b1c1c;
-}
-
-.lineup-table tr.bench-rec .name-cell {
-    color: #9b1c1c;
-}
-
-.lineup-table tr.bench-rec .rank-cell {
-    color: #9b1c1c;
-}
-
-.lineup-table tr.current-starter {
-    background-color: transparent;
 }
 
 .lineup-table .pos-cell {
     font-weight: 700;
     text-align: left;
-    width: 38px;
-    color: #4a4a4a;
+    width: 42px;
+    color: #475569;
+    font-size: 0.75rem;
 }
 
 .lineup-table .rank-cell {
     font-weight: 700;
     text-align: right;
     width: 44px;
-    color: #7a7a7a;
+    color: #64748b;
     white-space: nowrap;
+    font-size: 0.75rem;
 }
 
 .lineup-table .name-cell {
@@ -195,288 +35,138 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.8125rem;
+}
+
+/* Lineup Highlights */
+.lineup-table tr.pickup-rec {
+    background-color: #ecfdf5;
+    border-left: 4px solid #10b981;
+    font-weight: 600;
+}
+.lineup-table tr.pickup-rec .pos-cell,
+.lineup-table tr.pickup-rec .name-cell {
+    color: #065f46;
+}
+.lineup-table tr.pickup-rec .rank-cell {
+    color: #059669;
+}
+
+.lineup-table tr.start-rec {
+    background-color: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    font-weight: 600;
+}
+.lineup-table tr.start-rec .pos-cell,
+.lineup-table tr.start-rec .name-cell {
+    color: #1e40af;
+}
+.lineup-table tr.start-rec .rank-cell {
+    color: #2563eb;
+}
+
+.lineup-table tr.drop-rec {
+    background-color: #fef2f2;
+    border-left: 4px solid #ef4444;
+    font-weight: 600;
+}
+.lineup-table tr.drop-rec .pos-cell,
+.lineup-table tr.drop-rec .name-cell {
+    color: #991b1b;
+}
+.lineup-table tr.drop-rec .rank-cell {
+    color: #b91c1c;
+}
+
+.lineup-table tr.bench-rec {
+    background-color: #fff1f2;
+    border-left: 4px solid #f43f5e;
+    color: #9f1239;
+}
+.lineup-table tr.bench-rec .pos-cell,
+.lineup-table tr.bench-rec .name-cell,
+.lineup-table tr.bench-rec .rank-cell {
+    color: #9f1239;
+}
+
+.lineup-table tr.current-starter {
+    background-color: transparent;
+}
+
+/* Position Rankings Tables */
+.rankings-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 3px;
+}
+
+.rankings-table td {
+    padding: 4px 6px;
+    vertical-align: middle;
+    white-space: nowrap;
 }
 
 .rankings-table .rank-cell {
     font-weight: 700;
     text-align: right;
-    color: #7a7a7a;
+    color: #64748b;
     white-space: nowrap;
     padding-right: 8px;
+    width: 28px;
+    font-size: 0.75rem;
 }
 
 .rankings-table .name-cell {
     text-align: left;
     white-space: nowrap;
-}
-
-.name-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    min-width: 0;
-}
-
-.player-name {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: #1e293b;
 }
 
-.status-badge {
-    font-size: 0.75rem;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-left: 6px;
-    flex-shrink: 0;
-}
-
-.badge-pickup {
-    background-color: #10b981;
-    color: #fff;
-    font-weight: 700;
-}
-
-.badge-drop {
-    background-color: #ef4444;
-    color: #fff;
-    font-weight: 700;
-}
-
-.badge-start {
-    background-color: #3273dc;
-    color: #fff;
-    font-weight: 700;
-}
-
-.badge-bench {
-    background-color: #f14668;
-    color: #fff;
-    font-weight: 700;
-}
-
-.badge-roster {
-    background-color: #2563eb;
-    color: #fff;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    padding: 2px 5px;
-    border-radius: 3px;
-    vertical-align: middle;
-}
-
-/* Position Rankings Table - My Roster Highlight */
 .rankings-table tr.on-my-team {
-    background-color: #e8f4fd;
-    border-left: 3px solid #2563eb;
+    background-color: #eff6ff;
+    border-left: 3px solid #3b82f6;
     font-weight: 600;
 }
-
 .rankings-table tr.on-my-team td {
-    color: #1e3a8a;
+    color: #1e40af;
 }
-
 .rankings-table tr.on-my-team .rank-cell {
-    color: #1d4ed8;
+    color: #2563eb;
     font-weight: 700;
 }
 
-/* Position Rankings Table - Suggested Pickup Highlight */
 .rankings-table tr.is-pickup {
     background-color: #ecfdf5;
     border-left: 3px solid #10b981;
     font-weight: 600;
 }
-
 .rankings-table tr.is-pickup td {
     color: #065f46;
 }
-
 .rankings-table tr.is-pickup .rank-cell {
     color: #059669;
     font-weight: 700;
 }
 
-/* Yahoo import panel */
-.yahoo-import-box {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: #fbfbfb;
-    border: 1px dashed #dbdbdb;
-    border-radius: 6px;
-}
-
-.yahoo-toggle-buttons {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-
-/* Help Question Button */
-.help-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 17px;
-    height: 17px;
-    border-radius: 50%;
-    background-color: #3273dc;
-    color: #fff !important;
-    font-size: 11px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    margin-left: 6px;
-    vertical-align: middle;
-    line-height: 1;
-    text-decoration: none;
-    transition: background-color 0.15s ease;
-}
-
-.help-btn:hover {
-    background-color: #2366d1;
-}
-
-/* Loading Overlay */
-.loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    color: #fff;
-}
-
-.spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 1s ease-in-out infinite;
-    margin-bottom: 1rem;
-}
-
+/* Spinner Animation */
 @keyframes spin {
     to {
         transform: rotate(360deg);
     }
 }
-
-/* Help text */
-.help.is-danger {
-    margin-top: 0.5rem;
-}
-
-/* Section Header */
-.section-header {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.35rem;
-    border-bottom: 2px solid #f0f0f0;
-}
-
-.section-header:first-of-type {
-    margin-top: 0;
-}
-
-.section-header .title {
-    margin-bottom: 0.25rem !important;
-    line-height: 1.25;
-}
-
-.section-header .subtitle {
-    margin-top: 0 !important;
-    margin-bottom: 0.25rem !important;
-    line-height: 1.3;
-}
-
-/* Recent Leagues History Tags */
-.recent-league-tag {
-    cursor: pointer;
-    transition: all 0.15s ease;
-    user-select: none;
-    background-color: #f3f4f6;
-    color: #374151;
-    border: 1px solid #e5e7eb;
-}
-
-.recent-league-tag:hover {
-    background-color: #e5e7eb;
-    color: #111827;
-    transform: translateY(-1px);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.recent-league-tag.is-active {
-    background-color: #111827 !important;
-    color: #ffffff !important;
-    border-color: #111827;
-}
-
-.recent-league-tag.is-active .tag-platform {
-    color: #60a5fa !important;
-}
-
-.recent-league-tag .tag-league-name {
-    color: #111827;
-}
-
-.recent-league-tag .tag-owner-name {
-    color: #6b7280;
-}
-
-.recent-league-tag.is-active .tag-league-name {
-    color: #ffffff !important;
-}
-
-.recent-league-tag.is-active .tag-owner-name {
-    color: #d1d5db !important;
-}
-
-.recent-league-tag.is-active .delete {
-    background-color: rgba(255, 255, 255, 0.25);
-}
-
-.recent-league-tag.is-active .delete:hover {
-    background-color: rgba(255, 255, 255, 0.5);
-}
-
-/* ==========================================================================
-   Lineup vs Waiver Matrix Chart Styles
-   ========================================================================== */
-.matrix-chart-box {
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-}
-
-.matrix-legend-dot {
-    width: 10px;
-    height: 10px;
+.spinner {
+    width: 44px;
+    height: 44px;
+    border: 3.5px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
-    display: inline-block;
+    border-top-color: #ffffff;
+    animation: spin 0.8s linear infinite;
 }
 
-.matrix-chart-container {
-    position: relative;
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
-    width: 100%;
-    aspect-ratio: 16 / 10;
-}
-
+/* Matrix Chart SVG Elements */
 .matrix-svg {
     width: 100%;
     height: 100%;
@@ -542,10 +232,3 @@
     transform: translate(-50%, -100%);
     transition: transform 0.08s ease;
 }
-
-.quadrant-card {
-    border-radius: 8px;
-    height: 100%;
-}
-
-

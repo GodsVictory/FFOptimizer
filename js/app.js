@@ -7,8 +7,11 @@ var app = new Vue({
     data() {
         return {
             platform: 'Sleeper',
-            scoring: 'STD',
+            scoring: 'PPR',
             flex: 'WRT',
+            showSettingsOverride: false,
+            leagueDetectedScoring: '',
+            leagueDetectedFlex: '',
 
             // League inputs
             sleeperLeagueId: '',
@@ -84,6 +87,8 @@ var app = new Vue({
                 !pickupNames.has(normFn(p.name))
             );
 
+            const flexPositions = (this.flex === 'WR') ? ['RB', 'WR'] : ['RB', 'WR', 'TE'];
+
             let selectedFreeAgents = [];
             if (currentPos === 'ALL') {
                 const positions = ['QB', 'RB', 'WR', 'TE', 'DST'];
@@ -94,6 +99,15 @@ var app = new Vue({
                         .slice(0, 4);
                     selectedFreeAgents.push(...topForPos);
                 }
+            } else if (currentPos === 'FLX') {
+                selectedFreeAgents = allFreeAgents
+                    .filter(p => flexPositions.includes(p.position) && (p.flxRank > 0 || p.rank > 0))
+                    .sort((a, b) => {
+                        const rA = a.flxRank > 0 ? a.flxRank : (a.rank + 50);
+                        const rB = b.flxRank > 0 ? b.flxRank : (b.rank + 50);
+                        return rA - rB;
+                    })
+                    .slice(0, 15);
             } else {
                 selectedFreeAgents = allFreeAgents
                     .filter(p => p.position === currentPos)
@@ -110,14 +124,22 @@ var app = new Vue({
                 const full = (this.allRankedPlayers || []).find(ap => normFn(ap.name) === norm) || p;
                 const pos = full.position || p.position || p.slot;
 
-                if (currentPos !== 'ALL' && pos !== currentPos) return;
+                if (currentPos !== 'ALL') {
+                    if (currentPos === 'FLX') {
+                        if (!flexPositions.includes(pos) && pos !== 'FLX') return;
+                    } else if (pos !== currentPos) {
+                        return;
+                    }
+                }
 
-                const weekRank = (pos === 'FLX' && full.flxRank > 0) 
-                    ? full.flxRank 
-                    : (full.rank > 0 ? full.rank : (p.rank > 0 ? p.rank : null));
-                const rosRank = (full.rosRank > 0) 
-                    ? full.rosRank 
-                    : (pos === 'FLX' && full.rosFlxRank > 0 ? full.rosFlxRank : null);
+                // If in FLX filter or slot/pos is FLX, prioritize flex ranks
+                const weekRank = (currentPos === 'FLX' || pos === 'FLX')
+                    ? (full.flxRank > 0 ? full.flxRank : (full.rank > 0 ? full.rank : (p.rank > 0 ? p.rank : null)))
+                    : (full.rank > 0 ? full.rank : (full.flxRank > 0 ? full.flxRank : (p.rank > 0 ? p.rank : null)));
+
+                const rosRank = (currentPos === 'FLX' || pos === 'FLX')
+                    ? (full.rosFlxRank > 0 ? full.rosFlxRank : (full.rosRank > 0 ? full.rosRank : null))
+                    : (full.rosRank > 0 ? full.rosRank : (full.rosFlxRank > 0 ? full.rosFlxRank : null));
 
                 if (!playerMap.has(norm)) {
                     playerMap.set(norm, {
@@ -158,6 +180,8 @@ var app = new Vue({
             let maxRank = 50;
             if (currentPos === 'QB' || currentPos === 'DST' || currentPos === 'K' || currentPos === 'TE') {
                 maxRank = 32;
+            } else if (currentPos === 'FLX') {
+                maxRank = 75;
             } else if (currentPos === 'ALL') {
                 maxRank = 50;
             }
@@ -223,16 +247,29 @@ var app = new Vue({
                 }
 
                 let whisker = null;
-                if (isRankMode && p.minRank && p.maxRank) {
-                    const xMin = xScale(p.minRank);
-                    const xMax = xScale(p.maxRank);
-                    whisker = {
-                        x1: Math.min(xMin, xMax),
-                        x2: Math.max(xMin, xMax),
-                        y: cy,
-                        strokeColor: strokeColor,
-                        opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
-                    };
+                if (isRankMode) {
+                    if (currentPos !== 'FLX' && p.minRank && p.maxRank) {
+                        const xMin = xScale(p.minRank);
+                        const xMax = xScale(p.maxRank);
+                        whisker = {
+                            x1: Math.min(xMin, xMax),
+                            x2: Math.max(xMin, xMax),
+                            y: cy,
+                            strokeColor: strokeColor,
+                            opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
+                        };
+                    } else if (currentPos === 'FLX' && p.stdDev && p.weekRank) {
+                        const spread = Math.max(2, Math.round(p.stdDev * 1.8));
+                        const xMin = xScale(Math.max(1, p.weekRank - spread));
+                        const xMax = xScale(p.weekRank + spread);
+                        whisker = {
+                            x1: Math.min(xMin, xMax),
+                            x2: Math.max(xMin, xMax),
+                            y: cy,
+                            strokeColor: strokeColor,
+                            opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
+                        };
+                    }
                 }
 
                 let label = null;
@@ -581,6 +618,15 @@ var app = new Vue({
                 this.startingSlots = leagueData.startingSlots || [];
                 this.owners = leagueData.owners || [];
                 this.rosteredPlayers = leagueData.rosteredPlayers;
+
+                if (leagueData.scoring) {
+                    this.scoring = leagueData.scoring;
+                    this.leagueDetectedScoring = leagueData.scoring;
+                }
+                if (leagueData.flex) {
+                    this.flex = leagueData.flex;
+                    this.leagueDetectedFlex = leagueData.flex;
+                }
 
                 // Auto-select owner:
                 // Priority:

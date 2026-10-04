@@ -96,11 +96,35 @@ const EspnService = {
         }
 
         const leagueName = (data.settings && data.settings.name) || data.name || '';
+
+        // Auto-detect scoring format from ESPN scoringItems
+        let detectedScoring = 'STD';
+        if (data.settings && data.settings.scoringSettings && Array.isArray(data.settings.scoringSettings.scoringItems)) {
+            const recItem = data.settings.scoringSettings.scoringItems.find(item => item.statId === 53);
+            if (recItem && typeof recItem.points === 'number') {
+                if (recItem.points >= 0.75) detectedScoring = 'PPR';
+                else if (recItem.points >= 0.25) detectedScoring = 'HALF';
+                else detectedScoring = 'STD';
+            }
+        }
+
+        // Auto-detect flex format from lineupSlotCounts
+        let detectedFlex = 'WRT';
+        if (slotCounts) {
+            if (slotCounts['23'] && slotCounts['23'] > 0) {
+                detectedFlex = 'WRT';
+            } else if (slotCounts['3'] && slotCounts['3'] > 0) {
+                detectedFlex = 'WR';
+            }
+        }
+
         return {
             leagueName,
             startingSlots,
             owners,
-            rosteredPlayers
+            rosteredPlayers,
+            scoring: detectedScoring,
+            flex: detectedFlex
         };
     }
 };

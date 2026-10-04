@@ -107,11 +107,32 @@ const SleeperService = {
             }
         }
 
+        // Auto-detect scoring format from league scoring settings
+        let detectedScoring = 'STD';
+        if (league.scoring_settings && typeof league.scoring_settings.rec === 'number') {
+            const rec = league.scoring_settings.rec;
+            if (rec >= 0.75) detectedScoring = 'PPR';
+            else if (rec >= 0.25) detectedScoring = 'HALF';
+            else detectedScoring = 'STD';
+        }
+
+        // Auto-detect flex format from roster positions
+        let detectedFlex = 'WRT';
+        if (league.roster_positions && Array.isArray(league.roster_positions)) {
+            if (league.roster_positions.includes('WRRB_FLEX')) {
+                detectedFlex = 'WR';
+            } else if (league.roster_positions.includes('FLEX') || league.roster_positions.includes('W/R/T')) {
+                detectedFlex = 'WRT';
+            }
+        }
+
         return {
             leagueName: (league && league.name) ? league.name : '',
             startingSlots,
             owners,
-            rosteredPlayers
+            rosteredPlayers,
+            scoring: detectedScoring,
+            flex: detectedFlex
         };
     }
 };

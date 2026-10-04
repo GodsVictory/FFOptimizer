@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-50">
 
 <head>
     <meta charset="utf-8">
@@ -10,8 +10,25 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="manifest" href="site.webmanifest">
 
-    <!-- CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css">
+    <!-- Tailwind CSS (Play CDN for standalone zero-build deployment) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#10b981',
+                            600: '#059669',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS (Table highlights & SVG animations) -->
     <link rel="stylesheet" href="css/app.css">
 
     <!-- Third-Party Libraries -->
@@ -20,599 +37,642 @@
     <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
 </head>
 
-<body>
-    <div id="app">
-        <section class="section">
-            <div class="container">
-                <!-- Header -->
-                <div class="level is-mobile mb-2">
-                    <div class="level-left noselect">
-                        <div class="level-item">
-                            <h1 class="brand-title">
-                                <img src="favicon-32x32.png" alt="FF Optimizer">
-                                <span>FF Optimizer</span>
-                            </h1>
-                        </div>
+<body class="min-h-full text-slate-800 antialiased font-sans selection:bg-slate-900 selection:text-white">
+    <div id="app" class="min-h-full">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7">
+
+            <!-- App Header Bar -->
+            <header class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200 select-none">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <img src="favicon-32x32.png" alt="FF Optimizer" class="w-8 h-8 rounded-lg shadow-sm">
+                        <h1 class="text-xl font-bold tracking-tight text-slate-900">FF Optimizer</h1>
                     </div>
-                    <div class="level-right noselect">
-                        <div class="level-item">
-                            <a class="button is-black has-text-weight-bold is-small" href="https://paypal.me/ReidandKat" target="_blank" rel="noopener">Donate</a>
-                        </div>
+                    <span v-if="week" class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                        Week {{ week }}
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3 text-xs">
+                    <button @click="refreshRankings"
+                            class="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-slate-800 transition py-1 px-2 rounded-md hover:bg-slate-100"
+                            title="Fetch fresh consensus rankings from FantasyPros">
+                        <span class="text-sm">&#8635;</span> Refresh Ranks
+                    </button>
+                    <span v-if="lastUpdatedAt !== ''" class="text-slate-400 hidden sm:inline">
+                        {{ lastUpdatedAt === 0 ? 'ranks updated just now' : 'ranks updated ' + lastUpdatedAt + 'm ago' }}
+                    </span>
+                    <a href="https://paypal.me/ReidandKat" target="_blank" rel="noopener"
+                       class="inline-flex items-center justify-center font-semibold text-xs text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm transition">
+                        Donate
+                    </a>
+                </div>
+            </header>
+
+            <!-- Main League Setup Card -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 mt-4">
+                <!-- Top Row: Platform Selector Pills & Auto-Detected League Rules Badge -->
+                <div class="flex items-center justify-between flex-wrap gap-2.5 mb-4">
+                    <!-- Platform Selector Pills -->
+                    <div class="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-200 select-none">
+                        <button v-for="plat in ['Sleeper', 'ESPN', 'Yahoo']" :key="plat"
+                                type="button"
+                                @click="platform = plat; onPlatformChange()"
+                                :class="platform === plat 
+                                    ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                    : 'text-slate-500 hover:text-slate-800 font-medium'"
+                                class="px-3.5 py-1 text-xs rounded-md transition-all">
+                            {{ plat }}
+                        </button>
+                    </div>
+
+                    <!-- Auto-Detected Format Indicator & Subtle Override Toggle -->
+                    <div class="flex items-center gap-2 select-none">
+                        <span class="text-xs text-slate-400 font-medium">Rules:</span>
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-50 text-slate-700 border border-slate-200">
+                            <span>{{ scoring === 'STD' ? 'Standard' : scoring === 'HALF' ? 'Half PPR' : 'PPR' }}</span>
+                            <span class="text-slate-300">•</span>
+                            <span>{{ flex === 'WRT' ? 'RB/WR/TE Flex' : 'RB/WR Flex' }}</span>
+                        </span>
+                        <button @click="showSettingsOverride = !showSettingsOverride"
+                                class="text-[11px] text-slate-400 hover:text-slate-700 underline transition ml-1"
+                                :title="showSettingsOverride ? 'Hide manual format settings' : 'Manually adjust scoring or flex settings'">
+                            {{ showSettingsOverride ? 'Hide' : 'Change' }}
+                        </button>
                     </div>
                 </div>
 
-                <!-- Subtitle Metadata -->
-                <div class="level is-mobile mb-4">
-                    <div class="level-left noselect">
-                        <div class="level-item is-flex is-align-items-center">
-                            <span class="subtitle is-6 has-text-weight-semibold mr-3">Week {{ week }}</span>
-                            <button class="button is-ghost is-small p-0 is-size-7 has-text-grey" @click="refreshRankings" title="Fetch fresh consensus rankings from FantasyPros">&#8635; Refresh Ranks</button>
+                <!-- Collapsible Settings Override Strip (if user wants to customize) -->
+                <div v-if="showSettingsOverride" class="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center gap-4 text-xs animate-in">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-slate-600">Scoring:</span>
+                        <div class="inline-flex gap-1">
+                            <button v-for="s in ['STD', 'HALF', 'PPR']" :key="s"
+                                    @click="scoring = s; onScoringOrFlexChange()"
+                                    :class="scoring === s ? 'bg-slate-900 text-white font-semibold' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'"
+                                    class="px-2.5 py-1 rounded text-xs transition">
+                                {{ s === 'STD' ? 'Standard' : s === 'HALF' ? 'Half PPR' : 'PPR' }}
+                            </button>
                         </div>
                     </div>
-                    <div class="level-right noselect">
-                        <p class="level-item subtitle is-7 has-text-grey" v-if="lastUpdatedAt !== ''">
-                            {{ lastUpdatedAt === 0 ? 'ranks updated just now' : 'ranks updated ' + lastUpdatedAt + 'm ago' }}
-                        </p>
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-slate-600">Flex Slot:</span>
+                        <div class="inline-flex gap-1">
+                            <button v-for="f in [{id: 'WRT', label: 'RB/WR/TE'}, {id: 'WR', label: 'RB/WR'}]" :key="f.id"
+                                    @click="flex = f.id; onScoringOrFlexChange()"
+                                    :class="flex === f.id ? 'bg-slate-900 text-white font-semibold' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'"
+                                    class="px-2.5 py-1 rounded text-xs transition">
+                                {{ f.label }}
+                            </button>
+                        </div>
                     </div>
+                    <span class="text-[11px] text-slate-400 italic">Auto-detected automatically when loading league</span>
                 </div>
 
-                <hr class="mt-1 mb-4">
-
-                <!-- Settings Controls Box -->
-                <div class="box control-box">
-                    <div class="columns is-mobile noselect is-centered">
-                        <!-- Scoring -->
-                        <div class="column">
-                            <div class="control-group">
-                                <label class="label is-size-7">Scoring</label>
-                                <div class="radio-group">
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="scoring" value="STD" v-model="scoring" @change="onScoringOrFlexChange"> Standard
-                                    </label>
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="scoring" value="HALF" v-model="scoring" @change="onScoringOrFlexChange"> Half PPR
-                                    </label>
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="scoring" value="PPR" v-model="scoring" @change="onScoringOrFlexChange"> PPR
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Flex -->
-                        <div class="column">
-                            <div class="control-group">
-                                <label class="label is-size-7">Flex</label>
-                                <div class="radio-group">
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="flex" value="WRT" v-model="flex" @change="onScoringOrFlexChange"> RB/WR/TE
-                                    </label>
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="flex" value="WR" v-model="flex" @change="onScoringOrFlexChange"> RB/WR
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Platform -->
-                        <div class="column">
-                            <div class="control-group">
-                                <label class="label is-size-7">Platform</label>
-                                <div class="radio-group">
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="platform" value="Sleeper" v-model="platform" @change="onPlatformChange"> Sleeper
-                                    </label>
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="platform" value="ESPN" v-model="platform" @change="onPlatformChange"> ESPN
-                                    </label>
-                                    <label class="radio-label is-size-7">
-                                        <input type="radio" name="platform" value="Yahoo" v-model="platform" @change="onPlatformChange"> Yahoo
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
+                <!-- Platform Inputs -->
+                <!-- 1. Sleeper Input -->
+                <div v-if="platform === 'Sleeper'">
+                    <div class="flex gap-2">
+                        <input type="text"
+                               v-model="sleeperLeagueId"
+                               @input="updateQueryParams"
+                               @keyup.enter="refresh"
+                               placeholder="Sleeper League ID (e.g. 1048684918291410944)"
+                               class="flex-1 min-w-0 px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition">
+                        <button @click="refresh"
+                                title="Load League"
+                                class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-sm transition flex items-center justify-center">
+                            &#10132;
+                        </button>
                     </div>
+                    <p class="text-xs text-slate-400 mt-1.5">Find your Sleeper League ID in your league URL or league settings.</p>
                 </div>
 
-                <!-- Platform Inputs Box -->
-                <div class="box" v-if="platform">
-                    <!-- Sleeper Input -->
-                    <!-- Sleeper Input -->
-                    <div v-if="platform === 'Sleeper'">
-                        <div class="field has-addons mb-2">
-                            <div class="control is-expanded">
-                                <input type="text" class="input" v-model="sleeperLeagueId" @input="updateQueryParams" @keyup.enter="refresh" placeholder="Sleeper League ID (e.g. 1048684918291410944)">
-                            </div>
-                            <div class="control">
-                                <button class="button is-black has-text-weight-bold" @click="refresh" title="Load League">&#10132;</button>
-                            </div>
-                        </div>
-                        <p class="help has-text-grey">Find your Sleeper League ID in your league URL or league settings.</p>
+                <!-- 2. ESPN Input -->
+                <div v-if="platform === 'ESPN'">
+                    <div class="flex gap-2">
+                        <input type="text"
+                               v-model="espnLeagueId"
+                               @input="updateQueryParams"
+                               @keyup.enter="refresh"
+                               placeholder="ESPN League ID (e.g. 12345678)"
+                               class="flex-1 min-w-0 px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition">
+                        <button @click="refresh"
+                                title="Load League"
+                                class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-sm transition flex items-center justify-center">
+                            &#10132;
+                        </button>
                     </div>
-
-                    <!-- ESPN Input -->
-                    <div v-if="platform === 'ESPN'">
-                        <div class="field has-addons mb-2">
-                            <div class="control is-expanded">
-                                <input type="text" class="input" v-model="espnLeagueId" @input="updateQueryParams" @keyup.enter="refresh" placeholder="ESPN League ID (e.g. 12345678)">
-                            </div>
-                            <div class="control">
-                                <button class="button is-black has-text-weight-bold" @click="refresh" title="Load League">&#10132;</button>
-                            </div>
-                        </div>
-                        <p class="help has-text-grey">League must be set to <strong>Public</strong> in ESPN League Settings.</p>
-                    </div>
-
-                    <!-- Yahoo Input Panel -->
-                    <div v-if="platform === 'Yahoo'">
-                        <div class="tabs is-toggle is-small is-fullwidth mb-3">
-                            <ul>
-                                <li :class="{'is-active': yahooMode === 'paste'}">
-                                    <a @click="yahooMode = 'paste'; updateQueryParams()"><strong>Quick Paste Roster (Zero-Auth)</strong></a>
-                                </li>
-                                <li :class="{'is-active': yahooMode === 'api'}">
-                                    <a @click="yahooMode = 'api'; updateQueryParams()"><strong>Yahoo API / League ID</strong></a>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <!-- Yahoo Quick Paste Mode -->
-                        <div v-if="yahooMode === 'paste'">
-                            <div class="field">
-                                <label class="label is-size-7">Paste Yahoo Team / Matchup Roster:</label>
-                                <div class="control">
-                                    <textarea class="textarea is-small" rows="5" v-model="yahooRosterText" placeholder="Copy your Yahoo Fantasy roster table from your team page (or press Ctrl+A, Ctrl+C on your team page) and paste here..."></textarea>
-                                </div>
-                            </div>
-                            <div class="buttons are-small mt-2">
-                                <button class="button is-black has-text-weight-bold" @click="refresh">Optimize Lineup &#10132;</button>
-                                <button class="button is-light" @click="loadSampleYahooText">Load Sample Roster</button>
-                            </div>
-                            <p class="help has-text-grey">Works with any Yahoo league! Simply highlight and copy the roster table from your Yahoo team page.</p>
-                        </div>
-
-                        <!-- Yahoo API Mode -->
-                        <div v-if="yahooMode === 'api'">
-                            <div class="field mb-2">
-                                <label class="label is-size-7">Yahoo League ID or Key (e.g. 123456 or nfl.l.123456):</label>
-                                <div class="control">
-                                    <input type="text" class="input is-small" v-model="yahooLeagueId" @input="updateQueryParams" placeholder="Yahoo League ID">
-                                </div>
-                            </div>
-                            <div class="field mb-2">
-                                <label class="label is-size-7">
-                                    OAuth Access Token (Bearer Token):
-                                    <button class="help-btn" @click.prevent="showYahooHelp = !showYahooHelp" title="How do I get an OAuth token?">?</button>
-                                </label>
-                                <div class="control">
-                                    <input type="password" class="input is-small" v-model="yahooAccessToken" placeholder="Yahoo OAuth Access Token (Optional if using proxy)">
-                                </div>
-                            </div>
-
-                            <!-- Collapsible Yahoo Token Instructions -->
-                            <div class="message is-info is-small mt-2 mb-3" v-if="showYahooHelp">
-                                <div class="message-header py-1 px-3">
-                                    <p>How to get your Yahoo OAuth Token</p>
-                                    <button class="delete is-small" aria-label="close" @click="showYahooHelp = false"></button>
-                                </div>
-                                <div class="message-body is-size-7 py-2 px-3">
-                                    <ol class="pl-3 mb-2" style="line-height: 1.5;">
-                                        <li>Create a free app at <a href="https://developer.yahoo.com/apps/create/" target="_blank" rel="noopener">Yahoo Developer Network</a> (Select <strong>Web Application</strong>, Redirect URI: <code>https://localhost:8080</code>, Permissions: <strong>Fantasy Sports Read</strong>).</li>
-                                        <li>Run the helper script in your project terminal:
-                                            <pre class="my-1 p-1 has-background-white has-text-weight-semibold">python getYahooToken.py</pre>
-                                        </li>
-                                        <li>Enter your Client ID & Secret, authorize in your browser, and paste the generated access token above.</li>
-                                    </ol>
-                                    <p class="has-text-grey"><em>Note: Yahoo tokens expire after 1 hour. You can also use the <strong>Quick Paste Roster</strong> tab with zero tokens or setup!</em></p>
-                                </div>
-                            </div>
-                            <div class="field mb-2">
-                                <label class="label is-size-7">CORS Proxy URL (Optional):</label>
-                                <div class="control">
-                                    <input type="text" class="input is-small" v-model="yahooProxyUrl" placeholder="https://corsproxy.io/?url=">
-                                </div>
-                            </div>
-                            <div class="control mt-3">
-                                <button class="button is-black is-small has-text-weight-bold" @click="refresh">Connect Yahoo API &#10132;</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Error Alert -->
-                    <div class="notification is-danger is-light mt-3 py-2 px-3 is-size-7" v-if="errorMessage">
-                        {{ errorMessage }}
-                    </div>
-
-                    <!-- Recent Leagues History -->
-                    <div class="recent-leagues-box mt-3 pt-3" v-if="leagueHistory && leagueHistory.length > 0" style="border-top: 1px solid #f0f0f0;">
-                        <div class="is-flex is-justify-content-between is-align-items-center mb-2">
-                            <span class="is-size-7 has-text-weight-bold has-text-grey">Recent Leagues:</span>
-                            <a class="is-size-7 has-text-grey" @click.prevent="clearHistory" style="cursor: pointer;" title="Clear all history">Clear</a>
-                        </div>
-                        <div class="tags are-small mb-0">
-                            <span v-for="(item, idx) in leagueHistory" :key="idx" 
-                                  class="tag is-rounded recent-league-tag" 
-                                  :class="{'is-active': isCurrentHistoryItem(item)}"
-                                  @click="selectHistoryItem(item)" 
-                                  :title="'Load ' + item.platform + ' • ' + (item.leagueName ? item.leagueName + ' • ' : '') + (item.ownerName ? item.ownerName + ' • ' : '') + item.leagueId + ' (' + item.scoring + ')'">
-                                <span class="tag-platform has-text-weight-semibold mr-1">{{ item.platform }}:</span>
-                                <span class="tag-league-name has-text-weight-medium" v-if="item.leagueName">{{ item.leagueName }}</span>
-                                <span class="tag-owner-name ml-1" v-if="item.ownerName && item.leagueName">({{ item.ownerName }})</span>
-                                <span class="tag-owner-name" v-else-if="item.ownerName">{{ item.ownerName }}</span>
-                                <span class="tag-league-id" v-else>{{ item.leagueId }}</span>
-                                <button class="delete is-small ml-1" @click.stop.prevent="removeHistoryItem(idx)" title="Remove from history"></button>
-                            </span>
-                        </div>
-                    </div>
+                    <p class="text-xs text-slate-400 mt-1.5">League must be set to <strong>Public</strong> in ESPN League Settings.</p>
                 </div>
 
-                <!-- Team / Owner Selection -->
-                <div class="box" v-if="owners.length > 0">
-                    <div class="is-flex is-justify-content-between is-align-items-center mb-2" v-if="leagueName">
-                        <span class="has-text-weight-bold is-size-6">{{ leagueName }}</span>
-                        <span class="tag is-light is-size-7">{{ platform }}</span>
+                <!-- 3. Yahoo Input Panel -->
+                <div v-if="platform === 'Yahoo'">
+                    <!-- Yahoo Mode Tabs -->
+                    <div class="flex border-b border-slate-200 mb-3 select-none">
+                        <button @click="yahooMode = 'paste'; updateQueryParams()"
+                                :class="yahooMode === 'paste' ? 'border-b-2 border-slate-900 text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-800 font-medium'"
+                                class="px-3.5 py-2 text-xs transition">
+                            Quick Paste Roster (Zero-Auth)
+                        </button>
+                        <button @click="yahooMode = 'api'; updateQueryParams()"
+                                :class="yahooMode === 'api' ? 'border-b-2 border-slate-900 text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-800 font-medium'"
+                                class="px-3.5 py-2 text-xs transition">
+                            Yahoo API / League ID
+                        </button>
                     </div>
-                    <div class="field has-addons">
-                        <div class="control is-expanded">
-                            <div class="select is-fullwidth">
-                                <select id="ownerId" v-model="ownerId" @change="onOwnerChange">
-                                    <option v-for="owner in owners" :key="owner.id" :value="owner.id">{{ owner.owner }}</option>
-                                </select>
-                            </div>
+
+                    <!-- Yahoo Quick Paste Mode -->
+                    <div v-if="yahooMode === 'paste'">
+                        <div class="mb-2">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Paste Yahoo Team / Matchup Roster:</label>
+                            <textarea rows="4"
+                                      v-model="yahooRosterText"
+                                      placeholder="Copy your Yahoo Fantasy roster table from your team page (or press Ctrl+A, Ctrl+C on your team page) and paste here..."
+                                      class="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition"></textarea>
                         </div>
-                        <div class="control">
-                            <button class="button is-black has-text-weight-bold" @click="refresh" title="Reload Roster">&#8634;</button>
+                        <div class="flex items-center gap-2 mt-2">
+                            <button @click="refresh"
+                                    class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+                                Optimize Lineup &#10132;
+                            </button>
+                            <button @click="loadSampleYahooText"
+                                    class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition">
+                                Load Sample Roster
+                            </button>
                         </div>
+                        <p class="text-xs text-slate-400 mt-1.5">Works with any Yahoo league! Simply highlight and copy the roster table from your Yahoo team page.</p>
                     </div>
-                </div>
 
-                <!-- Results Section -->
-                <div v-if="ready && lineupReady">
-                    <hr>
-                    
-                    <!-- Lineup vs Waiver Value & Volatility Matrix Card -->
-                    <div class="box matrix-chart-box mb-5" v-if="matrixChartData">
-                        <div class="matrix-header is-flex is-justify-content-between is-align-items-center mb-3 pb-2" style="border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; gap: 0.75rem;">
-                            <div>
-                                <h2 class="title is-5 mb-1 is-flex is-align-items-center" style="gap: 0.5rem;">
-                                    <span>Lineup vs. Waiver Value & Volatility Matrix</span>
-                                    <span class="tag is-info is-light is-rounded has-text-weight-bold is-size-7">2D Visualizer</span>
-                                </h2>
-                                <p class="subtitle is-7 has-text-grey mb-0">
-                                    Weekly Value vs. Rest of Season (ROS) Value with Expert Disagreement Whiskers
-                                </p>
-                            </div>
-
-                            <!-- Controls: Position Tabs & Axis Toggle & Collapse -->
-                            <div class="is-flex is-align-items-center" style="flex-wrap: wrap; gap: 0.5rem;">
-                                <!-- Position Tabs -->
-                                <div class="buttons has-addons are-small mb-0">
-                                    <button v-for="pos in ['ALL', 'QB', 'RB', 'WR', 'TE', 'DST']" :key="pos"
-                                            class="button"
-                                            :class="{'is-black has-text-weight-bold': matrixPos === pos}"
-                                            @click="setMatrixPos(pos)">{{ pos }}</button>
-                                </div>
-
-                                <!-- Axis Toggle -->
-                                <div class="buttons has-addons are-small mb-0">
-                                    <button class="button"
-                                            :class="{'is-black has-text-weight-bold': matrixXMode === 'rank'}"
-                                            @click="setMatrixXMode('rank')">Weekly Rank</button>
-                                    <button class="button"
-                                            :class="{'is-black has-text-weight-bold': matrixXMode === 'pts'}"
-                                            @click="setMatrixXMode('pts')">Projected Pts</button>
-                                </div>
-
-                                <!-- Collapse / Expand Button -->
-                                <button class="button is-small is-light" @click="showMatrixChart = !showMatrixChart" :title="showMatrixChart ? 'Collapse Matrix' : 'Expand Matrix'">
-                                    <span v-if="showMatrixChart">&#9650; Hide</span>
-                                    <span v-else>&#9660; Show Matrix</span>
+                    <!-- Yahoo API Mode -->
+                    <div v-if="yahooMode === 'api'" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Yahoo League ID or Key (e.g. 123456 or nfl.l.123456):</label>
+                            <input type="text"
+                                   v-model="yahooLeagueId"
+                                   @input="updateQueryParams"
+                                   placeholder="Yahoo League ID"
+                                   class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition">
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-medium text-slate-700">OAuth Access Token (Bearer Token):</label>
+                                <button @click.prevent="showYahooHelp = !showYahooHelp"
+                                        type="button"
+                                        class="text-[11px] text-blue-600 hover:underline">
+                                    {{ showYahooHelp ? 'Hide Token Help' : 'How to get token?' }}
                                 </button>
                             </div>
+                            <input type="password"
+                                   v-model="yahooAccessToken"
+                                   placeholder="Yahoo OAuth Access Token (Optional if using proxy)"
+                                   class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition">
                         </div>
 
-                        <!-- Collapsible Body -->
-                        <div v-show="showMatrixChart">
-                            <!-- Legend Bar -->
-                            <div class="matrix-legend is-flex is-justify-content-between is-align-items-center mb-2 px-1 is-size-7 has-text-grey" style="flex-wrap: wrap; gap: 0.5rem;">
-                                <div class="is-flex is-align-items-center" style="gap: 1rem; flex-wrap: wrap;">
-                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
-                                        <span class="matrix-legend-dot" style="background-color: #10b981;"></span>
-                                        <span class="has-text-weight-medium">Suggested Pickup</span>
-                                    </div>
-                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
-                                        <span class="matrix-legend-dot" style="background-color: #f43f5e;"></span>
-                                        <span class="has-text-weight-medium">Suggested Drop</span>
-                                    </div>
-                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
-                                        <span class="matrix-legend-dot" style="background-color: #3b82f6;"></span>
-                                        <span class="has-text-weight-medium">My Roster</span>
-                                    </div>
-                                    <div class="is-flex is-align-items-center" style="gap: 0.35rem;">
-                                        <span class="matrix-legend-dot" style="background-color: #94a3b8;"></span>
-                                        <span class="has-text-weight-medium">Free Agent</span>
-                                    </div>
-                                </div>
-                                <div class="is-size-7 has-text-grey-light is-italic is-hidden-mobile">
-                                    <span style="display: inline-block; width: 14px; height: 2px; background-color: #94a3b8; vertical-align: middle; margin-right: 4px;"></span>
-                                    <span>Horizontal Whisker = Expert Min ↔ Max Spread (Floor / Ceiling)</span>
-                                </div>
+                        <!-- Collapsible Yahoo Token Help -->
+                        <div v-if="showYahooHelp" class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-slate-700 space-y-1.5">
+                            <p class="font-semibold text-blue-900">How to get your Yahoo OAuth Token:</p>
+                            <ol class="list-decimal pl-4 space-y-1">
+                                <li>Create a free app at <a href="https://developer.yahoo.com/apps/create/" target="_blank" rel="noopener" class="text-blue-700 underline font-medium">Yahoo Developer Network</a> (Web App, Redirect: <code class="bg-white px-1 py-0.5 rounded border border-blue-200">https://localhost:8080</code>, Permissions: <strong>Fantasy Sports Read</strong>).</li>
+                                <li>Run the helper script in your project terminal:
+                                    <pre class="mt-1 p-1 bg-white rounded border border-blue-200 font-semibold font-mono text-slate-800">python getYahooToken.py</pre>
+                                </li>
+                                <li>Enter Client ID & Secret, authorize in browser, and paste the generated access token above.</li>
+                            </ol>
+                            <p class="text-slate-500 italic">Tokens expire after 1 hour. You can also use the <strong>Quick Paste Roster</strong> tab with zero tokens or setup!</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">CORS Proxy URL (Optional):</label>
+                            <input type="text"
+                                   v-model="yahooProxyUrl"
+                                   placeholder="https://corsproxy.io/?url="
+                                   class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition">
+                        </div>
+                        <button @click="refresh"
+                                class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+                            Connect Yahoo API &#10132;
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Notification -->
+                <div v-if="errorMessage" class="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-medium text-rose-800">
+                    {{ errorMessage }}
+                </div>
+
+                <!-- Recent Leagues History Chips -->
+                <div v-if="leagueHistory && leagueHistory.length > 0" class="mt-4 pt-3 border-t border-slate-100">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Recent Leagues</span>
+                        <button @click.prevent="clearHistory" class="text-xs text-slate-400 hover:text-slate-600 transition" title="Clear all history">Clear</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <span v-for="(item, idx) in leagueHistory" :key="idx"
+                              @click="selectHistoryItem(item)"
+                              :class="isCurrentHistoryItem(item) 
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'"
+                              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border cursor-pointer transition select-none"
+                              :title="'Load ' + item.platform + ' • ' + (item.leagueName ? item.leagueName + ' • ' : '') + (item.ownerName ? item.ownerName + ' • ' : '') + item.leagueId + ' (' + item.scoring + ')'">
+                            <span :class="isCurrentHistoryItem(item) ? 'text-blue-300' : 'text-slate-500'" class="font-semibold">{{ item.platform }}:</span>
+                            <span class="font-medium" v-if="item.leagueName">{{ item.leagueName }}</span>
+                            <span :class="isCurrentHistoryItem(item) ? 'text-slate-300' : 'text-slate-500'" v-if="item.ownerName && item.leagueName">({{ item.ownerName }})</span>
+                            <span v-else-if="item.ownerName">{{ item.ownerName }}</span>
+                            <span v-else>{{ item.leagueId }}</span>
+                            <button @click.stop.prevent="removeHistoryItem(idx)" 
+                                    :class="isCurrentHistoryItem(item) ? 'hover:bg-slate-700 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'"
+                                    class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ml-0.5 transition" 
+                                    title="Remove from history">&times;</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team / Owner Selection Card -->
+            <div v-if="owners.length > 0" class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 mt-4">
+                <div class="flex items-center justify-between flex-wrap gap-2 mb-2.5">
+                    <div class="flex items-center flex-wrap gap-2">
+                        <span class="text-base font-bold text-slate-900" v-if="leagueName">{{ leagueName }}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md bg-slate-100 text-slate-700 border border-slate-200">{{ platform }}</span>
+                        <span v-if="scoring" class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">{{ scoring }}</span>
+                        <span v-if="flex" class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 border border-blue-200">{{ flex === 'WRT' ? 'RB/WR/TE Flex' : 'RB/WR Flex' }}</span>
+                    </div>
+                    <span class="text-xs text-slate-500">{{ owners.length }} Teams</span>
+                </div>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <select id="ownerId" v-model="ownerId" @change="onOwnerChange"
+                                class="w-full appearance-none px-3.5 py-2 text-sm font-medium bg-white rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 pr-8 transition">
+                            <option v-for="owner in owners" :key="owner.id" :value="owner.id">{{ owner.owner }}</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-500">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                    <button @click="refresh"
+                            title="Reload Roster"
+                            class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-sm transition flex items-center justify-center">
+                        &#8634;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section (Lineup, Matrix & Rankings) -->
+            <div v-if="ready && lineupReady" class="mt-6">
+                <!-- Lineup vs Waiver Value & Volatility Matrix Card -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 mb-6" v-if="matrixChartData">
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-200">
+                        <div>
+                            <div class="flex items-center flex-wrap gap-2">
+                                <h2 class="text-lg font-bold text-slate-900">Lineup vs. Waiver Value & Volatility Matrix</h2>
+                                <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">2D Visualizer</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Weekly Value vs. Rest of Season (ROS) Value with Expert Disagreement Whiskers
+                            </p>
+                        </div>
+
+                        <!-- Matrix Controls: Position Tabs, Axis Toggle & Collapse -->
+                        <div class="flex items-center flex-wrap gap-2 select-none">
+                            <!-- Position Tabs -->
+                            <div class="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+                                <button v-for="pos in ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLX', 'DST']" :key="pos"
+                                        type="button"
+                                        @click="setMatrixPos(pos)"
+                                        :class="matrixPos === pos 
+                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
+                                        class="px-2.5 py-1 text-xs rounded-md transition-all">
+                                    {{ pos }}
+                                </button>
                             </div>
 
-                            <!-- SVG Chart Container -->
-                            <div class="matrix-chart-container">
-                                <svg class="matrix-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
-                                    <defs>
-                                        <marker id="matrix-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981"/>
-                                        </marker>
-                                    </defs>
-
-                                    <!-- 1. Quadrants Background & Labels -->
-                                    <g class="quadrants-group">
-                                        <!-- Top Right: Elite Studs -->
-                                        <rect :x="matrixChartData.midX" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#10b981" fill-opacity="0.04" />
-                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + 20" text-anchor="end" class="quadrant-label quadrant-studs">★ Elite Studs (Must Start)</text>
-
-                                        <!-- Top Left: High-Upside Stash -->
-                                        <rect :x="matrixChartData.margin.left" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#6366f1" fill-opacity="0.04" />
-                                        <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + 20" text-anchor="start" class="quadrant-label quadrant-stash">✦ Upside Stashes (Hold)</text>
-
-                                        <!-- Bottom Right: Streamer Gold -->
-                                        <rect :x="matrixChartData.midX" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f59e0b" fill-opacity="0.04" />
-                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="end" class="quadrant-label quadrant-streamer">⚡ Streamer Gold (Target)</text>
-
-                                        <!-- Bottom Left: Drop Candidates -->
-                                        <rect :x="matrixChartData.margin.left" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f43f5e" fill-opacity="0.04" />
-                                        <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="start" class="quadrant-label quadrant-drop">✕ Roster Clutter (Drop)</text>
-
-                                        <!-- Crosshair Dividing Lines -->
-                                        <line :x1="matrixChartData.midX" :y1="matrixChartData.margin.top" :x2="matrixChartData.midX" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
-                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.midY" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.midY" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
-
-                                        <!-- Diagonal Equality Vector (Rank mode only) -->
-                                        <line v-if="matrixChartData.isRankMode"
-                                              :x1="matrixChartData.margin.left + matrixChartData.plotWidth" :y1="matrixChartData.margin.top"
-                                              :x2="matrixChartData.margin.left" :y2="matrixChartData.margin.top + matrixChartData.plotHeight"
-                                              stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
-                                    </g>
-
-                                    <!-- 2. Axes Lines & Labels -->
-                                    <g class="axes-group">
-                                        <!-- X Axis -->
-                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.height - matrixChartData.margin.bottom" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
-                                        <text :x="matrixChartData.margin.left + matrixChartData.plotWidth / 2" :y="matrixChartData.height - 15" text-anchor="middle" class="axis-label">
-                                            {{ matrixChartData.isRankMode ? '◄ Worse Weekly Rank (#' + matrixChartData.maxRank + ') ─── WEEKLY VALUE ─── Better Weekly Rank (#1) ►' : '◄ Lower Points (' + matrixChartData.minPts + ' pts) ─── PROJECTED WEEKLY POINTS ─── Higher Points (' + matrixChartData.maxPts + '+ pts) ►' }}
-                                        </text>
-
-                                        <!-- Y Axis -->
-                                        <line :x1="matrixChartData.margin.left" :y1="matrixChartData.margin.top" :x2="matrixChartData.margin.left" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
-                                        <text :x="18" :y="matrixChartData.margin.top + matrixChartData.plotHeight / 2" text-anchor="middle" :transform="'rotate(-90, 18, ' + (matrixChartData.margin.top + matrixChartData.plotHeight / 2) + ')'" class="axis-label">
-                                            ◄ Worse ROS Rank (#{{ matrixChartData.maxRank }}) ─── REST OF SEASON VALUE ─── Better ROS Rank (#1) ►
-                                        </text>
-                                    </g>
-
-                                    <!-- 3. Upgrade Vector Lines (Drop -> Pickup) -->
-                                    <g class="upgrade-vectors-group">
-                                        <line v-for="(v, vIdx) in matrixChartData.upgradeVectors" :key="'vec-' + vIdx"
-                                              :x1="v.x1" :y1="v.y1" :x2="v.x2" :y2="v.y2"
-                                              stroke="#10b981" stroke-width="2.5" stroke-dasharray="5,4"
-                                              marker-end="url(#matrix-arrow)" opacity="0.85" />
-                                    </g>
-
-                                    <!-- 4. Whiskers (Min Rank <-> Max Rank Spread) -->
-                                    <g class="whiskers-group" v-if="matrixChartData.isRankMode">
-                                        <template v-for="(p, pIdx) in matrixChartData.players">
-                                            <g v-if="p.whisker" :key="'whisk-' + pIdx">
-                                                <line :x1="p.whisker.x1" :y1="p.whisker.y" :x2="p.whisker.x2" :y2="p.whisker.y"
-                                                      :stroke="p.whisker.strokeColor" stroke-width="2" stroke-linecap="round" :opacity="p.whisker.opacity" />
-                                                <!-- End caps -->
-                                                <line :x1="p.whisker.x1" :y1="p.whisker.y - 3" :x2="p.whisker.x1" :y2="p.whisker.y + 3"
-                                                      :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
-                                                <line :x1="p.whisker.x2" :y1="p.whisker.y - 3" :x2="p.whisker.x2" :y2="p.whisker.y + 3"
-                                                      :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
-                                            </g>
-                                        </template>
-                                    </g>
-
-                                    <!-- 5. Player Circles & Text Labels -->
-                                    <g class="players-group">
-                                        <template v-for="(p, pIdx) in matrixChartData.players">
-                                            <!-- Player Circle -->
-                                            <circle :key="'dot-' + pIdx"
-                                                    :cx="p.cx" :cy="p.cy" :r="p.radius"
-                                                    :fill="p.dotColor" stroke="#ffffff" stroke-width="2"
-                                                    class="player-dot"
-                                                    @mouseenter="onMatrixPlayerHover(p, $event)"
-                                                    @mouseleave="onMatrixPlayerLeave" />
-
-                                            <!-- Text Label (for key players) -->
-                                            <text v-if="p.label" :key="'label-' + pIdx"
-                                                  :x="p.label.x" :y="p.label.y"
-                                                  :text-anchor="p.label.anchor"
-                                                  font-size="10" font-weight="700"
-                                                  :fill="p.label.color"
-                                                  style="pointer-events: none; user-select: none;">
-                                                {{ p.label.text }}
-                                            </text>
-                                        </template>
-                                    </g>
-                                </svg>
-
-                                <!-- Floating Tooltip -->
-                                <div class="matrix-tooltip" v-if="matrixHoverPlayer" :style="matrixTooltipPos">
-                                    <div class="matrix-tooltip-header is-flex is-justify-content-between is-align-items-center mb-1 pb-1" style="border-bottom: 1px solid rgba(255,255,255,0.15);">
-                                        <span class="has-text-weight-bold has-text-white is-size-6">{{ matrixHoverPlayer.name }}</span>
-                                        <span class="tag is-small is-rounded is-uppercase has-text-weight-bold"
-                                              :class="{
-                                                  'is-success': matrixHoverPlayer.status === 'pickup',
-                                                  'is-danger': matrixHoverPlayer.status === 'drop',
-                                                  'is-info': matrixHoverPlayer.status === 'roster',
-                                                  'is-light': matrixHoverPlayer.status === 'wire'
-                                              }">{{ matrixHoverPlayer.status }}</span>
-                                    </div>
-                                    <div class="matrix-tooltip-body is-size-7">
-                                        <div class="is-flex is-justify-content-between mb-1">
-                                            <span class="has-text-grey-light">Pos & Team:</span>
-                                            <span class="has-text-weight-semibold has-text-white">{{ matrixHoverPlayer.pos }} • {{ matrixHoverPlayer.team || 'FA' }}</span>
-                                        </div>
-                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.opp">
-                                            <span class="has-text-grey-light">Matchup:</span>
-                                            <span class="has-text-weight-semibold has-text-white">{{ matrixHoverPlayer.opp }}</span>
-                                        </div>
-                                        <div class="is-flex is-justify-content-between mb-1">
-                                            <span class="has-text-grey-light">Weekly ECR:</span>
-                                            <span class="has-text-weight-bold has-text-success-light">#{{ matrixHoverPlayer.weekRank || '-' }}</span>
-                                        </div>
-                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.minRank && matrixHoverPlayer.maxRank">
-                                            <span class="has-text-grey-light">Expert Range:</span>
-                                            <span class="has-text-weight-semibold has-text-warning-light">#{{ matrixHoverPlayer.minRank }} - #{{ matrixHoverPlayer.maxRank }} {{ matrixHoverPlayer.stdDev ? '(±' + matrixHoverPlayer.stdDev + ')' : '' }}</span>
-                                        </div>
-                                        <div class="is-flex is-justify-content-between mb-1" v-if="matrixHoverPlayer.displayPts">
-                                            <span class="has-text-grey-light">Projected Pts:</span>
-                                            <span class="has-text-weight-bold has-text-info-light">{{ matrixHoverPlayer.displayPts }} pts</span>
-                                        </div>
-                                        <div class="is-flex is-justify-content-between">
-                                            <span class="has-text-grey-light">Rest of Season:</span>
-                                            <span class="has-text-weight-bold has-text-primary-light">#{{ matrixHoverPlayer.rosRank || '-' }}</span>
-                                        </div>
-                                    </div>
-                                </div>
+                            <!-- Axis Toggle -->
+                            <div class="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+                                <button type="button"
+                                        @click="setMatrixXMode('rank')"
+                                        :class="matrixXMode === 'rank' 
+                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
+                                        class="px-2.5 py-1 text-xs rounded-md transition-all">
+                                    Weekly Rank
+                                </button>
+                                <button type="button"
+                                        @click="setMatrixXMode('pts')"
+                                        :class="matrixXMode === 'pts' 
+                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
+                                        class="px-2.5 py-1 text-xs rounded-md transition-all">
+                                    Projected Pts
+                                </button>
                             </div>
 
-                            <!-- Quadrant Explanatory Footer Cards -->
-                            <div class="columns is-mobile is-multiline mt-3">
-                                <div class="column is-6-mobile is-3-tablet">
-                                    <div class="quadrant-card p-2 rounded has-background-success-light" style="border: 1px solid #bbf7d0;">
-                                        <div class="has-text-weight-bold is-size-7 has-text-success-dark text-uppercase">Top Right: Elite Studs</div>
-                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">High weekly output + High ROS equity. Must-start cornerstone players.</p>
-                                    </div>
-                                </div>
-                                <div class="column is-6-mobile is-3-tablet">
-                                    <div class="quadrant-card p-2 rounded has-background-info-light" style="border: 1px solid #bfdbfe;">
-                                        <div class="has-text-weight-bold is-size-7 has-text-info-dark text-uppercase">Top Left: Upside Stash</div>
-                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Lower current week (bye/injury) but top ROS value. DO NOT DROP.</p>
-                                    </div>
-                                </div>
-                                <div class="column is-6-mobile is-3-tablet">
-                                    <div class="quadrant-card p-2 rounded has-background-warning-light" style="border: 1px solid #fde68a;">
-                                        <div class="has-text-weight-bold is-size-7 has-text-warning-dark text-uppercase">Bottom Right: Streamer Gold</div>
-                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Prime weekly matchup despite modest ROS rank. Prime waiver pickup.</p>
-                                    </div>
-                                </div>
-                                <div class="column is-6-mobile is-3-tablet">
-                                    <div class="quadrant-card p-2 rounded has-background-danger-light" style="border: 1px solid #fecdd3;">
-                                        <div class="has-text-weight-bold is-size-7 has-text-danger-dark text-uppercase">Bottom Left: Drop Candidates</div>
-                                        <p class="is-size-7 has-text-grey-dark" style="line-height: 1.3;">Low weekly output & modest ROS outlook. Safe to churn for upgrades.</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Collapse / Expand Button -->
+                            <button @click="showMatrixChart = !showMatrixChart"
+                                    type="button"
+                                    class="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition"
+                                    :title="showMatrixChart ? 'Collapse Matrix' : 'Expand Matrix'">
+                                <span v-if="showMatrixChart">&#9650; Hide</span>
+                                <span v-else>&#9660; Show Matrix</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="columns">
-                        <!-- LEFT COLUMN: Lineup, Bench, and Drop in the same card -->
-                        <div class="column is-narrow lineup-column">
-                            <div class="box">
-                                <!-- 1. Optimal Lineup Section -->
-                                <h2 class="title is-5 mb-3">Optimal Lineup</h2>
-                                <table class="lineup-table">
+                    <!-- Collapsible Matrix Body -->
+                    <div v-show="showMatrixChart">
+                        <!-- Legend Bar -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 mb-2 px-1 select-none">
+                            <div class="flex items-center flex-wrap gap-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                    <span class="font-medium text-slate-700">Suggested Pickup</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                                    <span class="font-medium text-slate-700">Suggested Drop</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
+                                    <span class="font-medium text-slate-700">My Roster</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                                    <span class="font-medium text-slate-700">Free Agent</span>
+                                </div>
+                            </div>
+                            <div class="text-[11px] text-slate-400 italic hidden sm:flex items-center gap-1">
+                                <span class="inline-block w-3.5 h-0.5 bg-slate-400"></span>
+                                <span>Horizontal Whisker = Expert Min ↔ Max Spread (Floor / Ceiling)</span>
+                            </div>
+                        </div>
+
+                        <!-- SVG Chart Container -->
+                        <div class="relative w-full aspect-[16/10] bg-slate-50/75 rounded-xl border border-slate-200 overflow-hidden select-none">
+                            <svg class="matrix-svg w-full h-full block" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                                <defs>
+                                    <marker id="matrix-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981"/>
+                                    </marker>
+                                </defs>
+
+                                <!-- 1. Quadrants Background & Labels -->
+                                <g class="quadrants-group">
+                                    <!-- Top Right: Elite Studs -->
+                                    <rect :x="matrixChartData.midX" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#10b981" fill-opacity="0.04" />
+                                    <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + 20" text-anchor="end" class="quadrant-label quadrant-studs">★ Elite Studs (Must Start)</text>
+
+                                    <!-- Top Left: High-Upside Stash -->
+                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#6366f1" fill-opacity="0.04" />
+                                    <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + 20" text-anchor="start" class="quadrant-label quadrant-stash">✦ Upside Stashes (Hold)</text>
+
+                                    <!-- Bottom Right: Streamer Gold -->
+                                    <rect :x="matrixChartData.midX" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f59e0b" fill-opacity="0.04" />
+                                    <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="end" class="quadrant-label quadrant-streamer">⚡ Streamer Gold (Target)</text>
+
+                                    <!-- Bottom Left: Drop Candidates -->
+                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f43f5e" fill-opacity="0.04" />
+                                    <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="start" class="quadrant-label quadrant-drop">✕ Roster Clutter (Drop)</text>
+
+                                    <!-- Crosshair Dividing Lines -->
+                                    <line :x1="matrixChartData.midX" :y1="matrixChartData.margin.top" :x2="matrixChartData.midX" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+                                    <line :x1="matrixChartData.margin.left" :y1="matrixChartData.midY" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.midY" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+
+                                    <!-- Diagonal Equality Vector (Rank mode only) -->
+                                    <line v-if="matrixChartData.isRankMode"
+                                          :x1="matrixChartData.margin.left + matrixChartData.plotWidth" :y1="matrixChartData.margin.top"
+                                          :x2="matrixChartData.margin.left" :y2="matrixChartData.margin.top + matrixChartData.plotHeight"
+                                          stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                                </g>
+
+                                <!-- 2. Axes Lines & Labels -->
+                                <g class="axes-group">
+                                    <!-- X Axis -->
+                                    <line :x1="matrixChartData.margin.left" :y1="matrixChartData.height - matrixChartData.margin.bottom" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
+                                    <text :x="matrixChartData.margin.left + matrixChartData.plotWidth / 2" :y="matrixChartData.height - 15" text-anchor="middle" class="axis-label">
+                                        {{ matrixChartData.isRankMode ? '◄ Worse Weekly Rank (#' + matrixChartData.maxRank + ') ─── WEEKLY VALUE ─── Better Weekly Rank (#1) ►' : '◄ Lower Points (' + matrixChartData.minPts + ' pts) ─── PROJECTED WEEKLY POINTS ─── Higher Points (' + matrixChartData.maxPts + '+ pts) ►' }}
+                                    </text>
+
+                                    <!-- Y Axis -->
+                                    <line :x1="matrixChartData.margin.left" :y1="matrixChartData.margin.top" :x2="matrixChartData.margin.left" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
+                                    <text :x="18" :y="matrixChartData.margin.top + matrixChartData.plotHeight / 2" text-anchor="middle" :transform="'rotate(-90, 18, ' + (matrixChartData.margin.top + matrixChartData.plotHeight / 2) + ')'" class="axis-label">
+                                        ◄ Worse ROS Rank (#{{ matrixChartData.maxRank }}) ─── REST OF SEASON VALUE ─── Better ROS Rank (#1) ►
+                                    </text>
+                                </g>
+
+                                <!-- 3. Upgrade Vector Lines (Drop -> Pickup) -->
+                                <g class="upgrade-vectors-group">
+                                    <line v-for="(v, vIdx) in matrixChartData.upgradeVectors" :key="'vec-' + vIdx"
+                                          :x1="v.x1" :y1="v.y1" :x2="v.x2" :y2="v.y2"
+                                          stroke="#10b981" stroke-width="2.5" stroke-dasharray="5,4"
+                                          marker-end="url(#matrix-arrow)" opacity="0.85" />
+                                </g>
+
+                                <!-- 4. Whiskers (Min Rank <-> Max Rank Spread) -->
+                                <g class="whiskers-group" v-if="matrixChartData.isRankMode">
+                                    <template v-for="(p, pIdx) in matrixChartData.players">
+                                        <g v-if="p.whisker" :key="'whisk-' + pIdx">
+                                            <line :x1="p.whisker.x1" :y1="p.whisker.y" :x2="p.whisker.x2" :y2="p.whisker.y"
+                                                  :stroke="p.whisker.strokeColor" stroke-width="2" stroke-linecap="round" :opacity="p.whisker.opacity" />
+                                            <!-- End caps -->
+                                            <line :x1="p.whisker.x1" :y1="p.whisker.y - 3" :x2="p.whisker.x1" :y2="p.whisker.y + 3"
+                                                  :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
+                                            <line :x1="p.whisker.x2" :y1="p.whisker.y - 3" :x2="p.whisker.x2" :y2="p.whisker.y + 3"
+                                                  :stroke="p.whisker.strokeColor" stroke-width="1.5" :opacity="p.whisker.opacity" />
+                                        </g>
+                                    </template>
+                                </g>
+
+                                <!-- 5. Player Circles & Text Labels -->
+                                <g class="players-group">
+                                    <template v-for="(p, pIdx) in matrixChartData.players">
+                                        <!-- Player Circle -->
+                                        <circle :key="'dot-' + pIdx"
+                                                :cx="p.cx" :cy="p.cy" :r="p.radius"
+                                                :fill="p.dotColor" stroke="#ffffff" stroke-width="2"
+                                                class="player-dot"
+                                                @mouseenter="onMatrixPlayerHover(p, $event)"
+                                                @mouseleave="onMatrixPlayerLeave" />
+
+                                        <!-- Text Label (for key players) -->
+                                        <text v-if="p.label" :key="'label-' + pIdx"
+                                              :x="p.label.x" :y="p.label.y"
+                                              :text-anchor="p.label.anchor"
+                                              font-size="10" font-weight="700"
+                                              :fill="p.label.color"
+                                              style="pointer-events: none; user-select: none;">
+                                            {{ p.label.text }}
+                                        </text>
+                                    </template>
+                                </g>
+                            </svg>
+
+                            <!-- Floating Tooltip -->
+                            <div class="matrix-tooltip" v-if="matrixHoverPlayer" :style="matrixTooltipPos">
+                                <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-700">
+                                    <span class="font-bold text-white text-sm leading-tight">{{ matrixHoverPlayer.name }}</span>
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                          :class="{
+                                              'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': matrixHoverPlayer.status === 'pickup',
+                                              'bg-rose-500/20 text-rose-400 border border-rose-500/30': matrixHoverPlayer.status === 'drop',
+                                              'bg-blue-500/20 text-blue-400 border border-blue-500/30': matrixHoverPlayer.status === 'roster',
+                                              'bg-slate-700 text-slate-300': matrixHoverPlayer.status === 'wire'
+                                          }">{{ matrixHoverPlayer.status }}</span>
+                                </div>
+                                <div class="text-xs space-y-1">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">Pos & Team:</span>
+                                        <span class="font-semibold text-white">{{ matrixHoverPlayer.pos }} • {{ matrixHoverPlayer.team || 'FA' }}</span>
+                                    </div>
+                                    <div class="flex justify-between" v-if="matrixHoverPlayer.opp">
+                                        <span class="text-slate-400">Matchup:</span>
+                                        <span class="font-semibold text-white">{{ matrixHoverPlayer.opp }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">Weekly ECR:</span>
+                                        <span class="font-bold text-emerald-400">#{{ matrixHoverPlayer.weekRank || '-' }}</span>
+                                    </div>
+                                    <div class="flex justify-between" v-if="matrixHoverPlayer.minRank && matrixHoverPlayer.maxRank">
+                                        <span class="text-slate-400">Expert Range:</span>
+                                        <span class="font-semibold text-amber-300">#{{ matrixHoverPlayer.minRank }} - #{{ matrixHoverPlayer.maxRank }} {{ matrixHoverPlayer.stdDev ? '(±' + matrixHoverPlayer.stdDev + ')' : '' }}</span>
+                                    </div>
+                                    <div class="flex justify-between" v-if="matrixHoverPlayer.displayPts">
+                                        <span class="text-slate-400">Projected Pts:</span>
+                                        <span class="font-bold text-blue-400">{{ matrixHoverPlayer.displayPts }} pts</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-400">Rest of Season:</span>
+                                        <span class="font-bold text-indigo-400">#{{ matrixHoverPlayer.rosRank || '-' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quadrant Explanatory Footer Cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4">
+                            <div class="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200">
+                                <div class="font-bold text-xs text-emerald-800 uppercase tracking-wide">Top Right: Elite Studs</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">High weekly output + High ROS equity. Must-start cornerstone players.</p>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-indigo-50/80 border border-indigo-200">
+                                <div class="font-bold text-xs text-indigo-800 uppercase tracking-wide">Top Left: Upside Stash</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">Lower current week (bye/injury) but top ROS value. DO NOT DROP.</p>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200">
+                                <div class="font-bold text-xs text-amber-800 uppercase tracking-wide">Bottom Right: Streamer Gold</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">Prime weekly matchup despite modest ROS rank. Prime waiver pickup.</p>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-rose-50/80 border border-rose-200">
+                                <div class="font-bold text-xs text-rose-800 uppercase tracking-wide">Bottom Left: Drop Candidates</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">Low weekly output & modest ROS outlook. Safe to churn for upgrades.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Lineup & Rankings Layout -->
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <!-- LEFT COLUMN: Lineup, Bench, and Drop Card -->
+                    <div class="w-full lg:w-72 xl:w-80 flex-shrink-0">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+                            <!-- 1. Optimal Lineup Section -->
+                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Optimal Lineup</h2>
+                            <table class="lineup-table">
+                                <tbody>
+                                    <tr v-for="(slotItem, idx) in optimalLineup" :key="'opt-' + idx" :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok'}">
+                                        <td class="pos-cell">{{ slotItem.slot }}</td>
+                                        <td class="name-cell" :title="slotItem.name">{{ slotItem.name }}</td>
+                                        <td class="rank-cell">{{ slotItem.rank === '-' ? '-' : '#' + slotItem.rank }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- 2. Bench Section -->
+                            <div class="mt-4 pt-3 border-t border-slate-200">
+                                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Bench</h2>
+                                <table class="lineup-table" v-if="benchPlayers.length > 0">
                                     <tbody>
-                                        <tr v-for="(slotItem, idx) in optimalLineup" :key="'opt-' + idx" :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok'}">
-                                            <td class="pos-cell">{{ slotItem.slot }}</td>
-                                            <td class="name-cell" :title="slotItem.name">{{ slotItem.name }}</td>
-                                            <td class="rank-cell">{{ slotItem.rank === '-' ? '-' : '#' + slotItem.rank }}</td>
+                                        <tr v-for="(benchItem, bIdx) in benchPlayers" :key="'bench-' + bIdx" :class="{'bench-rec': benchItem.highlight === 'bench'}">
+                                            <td class="pos-cell">{{ benchItem.position || benchItem.slot }}</td>
+                                            <td class="name-cell" :title="benchItem.name">{{ benchItem.name }}</td>
+                                            <td class="rank-cell">{{ benchItem.rank === '-' ? '-' : '#' + benchItem.rank }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
+                                <p v-else class="text-xs text-slate-400 py-1">No bench players</p>
+                            </div>
 
-                                <!-- 2. Bench Section -->
-                                <div class="mt-4 pt-3" style="border-top: 1px solid #e5e7eb;">
-                                    <h2 class="title is-5 mb-3">Bench</h2>
-                                    <table class="lineup-table" v-if="benchPlayers.length > 0">
+                            <!-- 3. Drop Section -->
+                            <div class="mt-4 pt-3 border-t border-slate-200">
+                                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Drop</h2>
+                                <table class="lineup-table" v-if="dropPlayers.length > 0">
+                                    <tbody>
+                                        <tr v-for="(dropItem, dIdx) in dropPlayers" :key="'drop-' + dIdx" class="drop-rec">
+                                            <td class="pos-cell">{{ dropItem.position || dropItem.slot }}</td>
+                                            <td class="name-cell" :title="dropItem.name">{{ dropItem.name }}</td>
+                                            <td class="rank-cell">{{ dropItem.rank === '-' ? '-' : '#' + dropItem.rank }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p v-else class="text-xs text-slate-400 py-1">No drops recommended</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: Weekly & ROS Position Rankings Grids -->
+                    <div class="flex-1 min-w-0 space-y-6">
+                        <!-- Weekly Rankings Section -->
+                        <div v-if="Object.keys(positionColumns).length > 0">
+                            <div class="pb-2 mb-3 border-b border-slate-200">
+                                <h2 class="text-base font-bold text-slate-900">Weekly Rankings (Week {{ week }})</h2>
+                                <p class="text-xs text-slate-500">Top consensus players by position for this week's matchups</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+                                <div v-for="(colData, posKey) in positionColumns" :key="'week-' + posKey"
+                                     class="bg-white rounded-xl border border-slate-200 shadow-xs p-3">
+                                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-100">{{ colData.position }}</h3>
+                                    <table class="rankings-table">
                                         <tbody>
-                                            <tr v-for="(benchItem, bIdx) in benchPlayers" :key="'bench-' + bIdx" :class="{'bench-rec': benchItem.highlight === 'bench'}">
-                                                <td class="pos-cell">{{ benchItem.position || benchItem.slot }}</td>
-                                                <td class="name-cell" :title="benchItem.name">{{ benchItem.name }}</td>
-                                                <td class="rank-cell">{{ benchItem.rank === '-' ? '-' : '#' + benchItem.rank }}</td>
+                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                                <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
+                                                <td class="name-cell" :title="player.name">{{ player.name }}</td>
                                             </tr>
                                         </tbody>
                                     </table>
-                                    <p v-else class="is-size-7 has-text-grey py-1">No bench players</p>
-                                </div>
-
-                                <!-- 3. Drop Section -->
-                                <div class="mt-4 pt-3" style="border-top: 1px solid #e5e7eb;">
-                                    <h2 class="title is-5 mb-3">Drop</h2>
-                                    <table class="lineup-table" v-if="dropPlayers.length > 0">
-                                        <tbody>
-                                            <tr v-for="(dropItem, dIdx) in dropPlayers" :key="'drop-' + dIdx" class="drop-rec">
-                                                <td class="pos-cell">{{ dropItem.position || dropItem.slot }}</td>
-                                                <td class="name-cell" :title="dropItem.name">{{ dropItem.name }}</td>
-                                                <td class="rank-cell">{{ dropItem.rank === '-' ? '-' : '#' + dropItem.rank }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                    <p v-else class="is-size-7 has-text-grey py-1">No drops recommended</p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- RIGHT COLUMN: Wider column for Weekly and ROS Rankings -->
-                        <div class="column">
-                            <!-- Weekly Rankings Section -->
-                            <div class="section-header" v-if="Object.keys(positionColumns).length > 0">
-                                <h2 class="title is-5">Weekly Rankings (Week {{ week }})</h2>
-                                <p class="subtitle is-7 has-text-grey">Top consensus players by position for this week's matchups</p>
+                        <!-- Rest of Season (ROS) Rankings Section -->
+                        <div v-if="Object.keys(rosPositionColumns).length > 0">
+                            <div class="pb-2 mb-3 border-b border-slate-200">
+                                <h2 class="text-base font-bold text-slate-900">Rest of Season (ROS) Rankings</h2>
+                                <p class="text-xs text-slate-500">Consensus rest of season outlook for trades, playoffs, and long-term value</p>
                             </div>
-                            <div class="columns is-multiline">
-                                <!-- Weekly Position Rankings Columns -->
-                                <div class="column is-narrow" v-for="(colData, posKey) in positionColumns" :key="'week-' + posKey">
-                                    <div class="box">
-                                        <h3 class="title is-6 mb-2">{{ colData.position }}</h3>
-                                        <table class="rankings-table">
-                                            <tbody>
-                                                <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
-                                                    <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
-                                                    <td class="name-cell" :title="player.name">{{ player.name }}</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Rest of Season (ROS) Rankings Section -->
-                            <div class="section-header" v-if="Object.keys(rosPositionColumns).length > 0">
-                                <h2 class="title is-5">Rest of Season (ROS) Rankings</h2>
-                                <p class="subtitle is-7 has-text-grey">Consensus rest of season outlook for trades, playoffs, and long-term value</p>
-                            </div>
-                            <div class="columns is-multiline" v-if="Object.keys(rosPositionColumns).length > 0">
-                                <!-- ROS Position Rankings Columns -->
-                                <div class="column is-narrow" v-for="(colData, posKey) in rosPositionColumns" :key="'ros-' + posKey">
-                                    <div class="box">
-                                        <h3 class="title is-6 mb-2">{{ colData.position }}</h3>
-                                        <table class="rankings-table">
-                                            <tbody>
-                                                <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
-                                                    <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
-                                                    <td class="name-cell" :title="player.name">{{ player.name }}</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+                                <div v-for="(colData, posKey) in rosPositionColumns" :key="'ros-' + posKey"
+                                     class="bg-white rounded-xl border border-slate-200 shadow-xs p-3">
+                                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-100">{{ colData.position }}</h3>
+                                    <table class="rankings-table">
+                                        <tbody>
+                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                                <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
+                                                <td class="name-cell" :title="player.name">{{ player.name }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
 
         <!-- Loading Overlay -->
-        <div class="loading-overlay" v-if="loading">
+        <div class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/75 backdrop-blur-sm transition-opacity" v-if="loading">
             <div class="spinner"></div>
-            <h2 class="title is-4 has-text-white noselect">Optimizing Lineup...</h2>
+            <h2 class="text-lg font-semibold text-white tracking-wide mt-3 select-none">Optimizing Lineup...</h2>
         </div>
     </div>
 
