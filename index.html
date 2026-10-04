@@ -368,6 +368,28 @@
                                 </button>
                             </div>
 
+                            <!-- Zoom Mode Toggle -->
+                            <div class="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+                                <button type="button"
+                                        @click="setMatrixZoom('cluster')"
+                                        :class="matrixZoom === 'cluster' 
+                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
+                                        class="px-2.5 py-1 text-xs rounded-md transition-all"
+                                        title="Auto-zoom and center on the bulk of players, pinning extreme outliers to the edge">
+                                    Cluster Focus
+                                </button>
+                                <button type="button"
+                                        @click="setMatrixZoom('fit')"
+                                        :class="matrixZoom === 'fit' 
+                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
+                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
+                                        class="px-2.5 py-1 text-xs rounded-md transition-all"
+                                        title="Fit all players from Rank #1 to maximum rank">
+                                    Fit All
+                                </button>
+                            </div>
+
                             <!-- Collapse / Expand Button -->
                             <button @click="showMatrixChart = !showMatrixChart"
                                     type="button"
@@ -401,9 +423,15 @@
                                     <span class="font-medium text-slate-700">Free Agent</span>
                                 </div>
                             </div>
-                            <div class="text-[11px] text-slate-400 italic hidden sm:flex items-center gap-1">
-                                <span class="inline-block w-3.5 h-0.5 bg-slate-400"></span>
-                                <span>Horizontal Whisker = Expert Min ↔ Max Spread (Floor / Ceiling)</span>
+                            <div class="flex items-center gap-3">
+                                <div v-if="matrixChartData.outlierCount > 0 && matrixZoom === 'cluster'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-800 font-medium">
+                                    <span>★ {{ matrixChartData.outlierCount }} top performer{{ matrixChartData.outlierCount > 1 ? 's' : '' }} pinned to edge</span>
+                                    <button @click="setMatrixZoom('fit')" class="underline text-amber-900 hover:text-amber-950 font-semibold ml-0.5">Show All</button>
+                                </div>
+                                <div class="text-[11px] text-slate-400 italic hidden sm:flex items-center gap-1">
+                                    <span class="inline-block w-3.5 h-0.5 bg-slate-400"></span>
+                                    <span>Horizontal Whisker = Expert Spread</span>
+                                </div>
                             </div>
                         </div>
 
@@ -450,13 +478,13 @@
                                     <!-- X Axis -->
                                     <line :x1="matrixChartData.margin.left" :y1="matrixChartData.height - matrixChartData.margin.bottom" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
                                     <text :x="matrixChartData.margin.left + matrixChartData.plotWidth / 2" :y="matrixChartData.height - 15" text-anchor="middle" class="axis-label">
-                                        {{ matrixChartData.isRankMode ? '◄ Worse Weekly Rank (#' + matrixChartData.maxRank + ') ─── WEEKLY VALUE ─── Better Weekly Rank (#1) ►' : '◄ Lower Points (' + matrixChartData.minPts + ' pts) ─── PROJECTED WEEKLY POINTS ─── Higher Points (' + matrixChartData.maxPts + '+ pts) ►' }}
+                                        {{ matrixChartData.isRankMode ? '◄ Worse Weekly Rank (#' + matrixChartData.maxX + ') ─── WEEKLY VALUE ─── Better Weekly Rank (#' + matrixChartData.minX + ') ►' : '◄ Lower Points (' + matrixChartData.minX + ' pts) ─── PROJECTED WEEKLY POINTS ─── Higher Points (' + matrixChartData.maxX + '+ pts) ►' }}
                                     </text>
 
                                     <!-- Y Axis -->
                                     <line :x1="matrixChartData.margin.left" :y1="matrixChartData.margin.top" :x2="matrixChartData.margin.left" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5"/>
                                     <text :x="18" :y="matrixChartData.margin.top + matrixChartData.plotHeight / 2" text-anchor="middle" :transform="'rotate(-90, 18, ' + (matrixChartData.margin.top + matrixChartData.plotHeight / 2) + ')'" class="axis-label">
-                                        ◄ Worse ROS Rank (#{{ matrixChartData.maxRank }}) ─── REST OF SEASON VALUE ─── Better ROS Rank (#1) ►
+                                        ◄ Worse ROS Rank (#{{ matrixChartData.maxY }}) ─── REST OF SEASON VALUE ─── Better ROS Rank (#{{ matrixChartData.minY }}) ►
                                     </text>
                                 </g>
 
@@ -489,7 +517,8 @@
                                         <!-- Player Circle -->
                                         <circle :key="'dot-' + pIdx"
                                                 :cx="p.cx" :cy="p.cy" :r="p.radius"
-                                                :fill="p.dotColor" stroke="#ffffff" stroke-width="2"
+                                                :fill="p.dotColor" :stroke="p.strokeColor || '#ffffff'" :stroke-width="p.strokeWidth || 2"
+                                                :stroke-dasharray="p.isOutlier ? '3,2' : 'none'"
                                                 class="player-dot"
                                                 @mouseenter="onMatrixPlayerHover(p, $event)"
                                                 @mouseleave="onMatrixPlayerLeave" />

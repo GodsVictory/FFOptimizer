@@ -51,6 +51,7 @@ var app = new Vue({
             // Matrix Chart state
             matrixPos: 'ALL',
             matrixXMode: 'rank', // 'rank' or 'pts'
+            matrixZoom: 'cluster', // 'cluster' (density-based auto-zoom) or 'fit' (fit all)
             matrixHoverPlayer: null,
             matrixTooltipPos: { left: '0px', top: '0px' },
             showMatrixChart: true
@@ -176,32 +177,113 @@ var app = new Vue({
             const plotWidth = width - margin.left - margin.right;
             const plotHeight = height - margin.top - margin.bottom;
 
-            const minRank = 1;
-            let maxRank = 50;
-            if (currentPos === 'QB' || currentPos === 'DST' || currentPos === 'K' || currentPos === 'TE') {
-                maxRank = 32;
-            } else if (currentPos === 'FLX') {
-                maxRank = 75;
-            } else if (currentPos === 'ALL') {
-                maxRank = 50;
-            }
+            const isRankMode = this.matrixXMode === 'rank';
+            const isClusterZoom = this.matrixZoom === 'cluster';
 
-            let minPts = 4.0;
-            let maxPts = 24.0;
-            if (currentPos === 'QB') {
-                minPts = 10.0;
-                maxPts = 28.0;
-            } else if (currentPos === 'DST' || currentPos === 'K') {
-                minPts = 3.0;
-                maxPts = 14.0;
-            }
+            // 1. Gather display points and effective ROS rank for all candidates
+            const preparedPlayers = rawList.map(p => {
+                let displayPts = p.pts;
+                if (displayPts == null && p.weekRank) {
+                    if (p.pos === 'QB') displayPts = Math.max(10, +(26 - p.weekRank * 0.45).toFixed(1));
+                    else if (p.pos === 'DST' || p.pos === 'K') displayPts = Math.max(3, +(12 - p.weekRank * 0.28).toFixed(1));
+                    else displayPts = Math.max(4, +(22 - p.weekRank * 0.35).toFixed(1));
+                }
+                const effRos = (p.rosRank != null && p.rosRank > 0) ? p.rosRank : (p.weekRank != null ? p.weekRank : null);
+                return {
+                    ...p,
+                    displayPts: displayPts,
+                    effRos: effRos
+                };
+            });
 
             const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+            const getPercentile = (sorted, p) => {
+                if (sorted.length === 0) return 0;
+                const idx = (sorted.length - 1) * p;
+                const l = Math.floor(idx);
+                const h = Math.ceil(idx);
+                return sorted[l] + (sorted[h] - sorted[l]) * (idx - l);
+            };
+
+            // Gather valid sorted X and Y values
+            const validX = isRankMode
+                ? preparedPlayers.map(p => p.weekRank).filter(v => v != null && v > 0).sort((a, b) => a - b)
+                : preparedPlayers.map(p => p.displayPts).filter(v => v != null).sort((a, b) => a - b);
+            const validRos = preparedPlayers.map(p => p.effRos).filter(v => v != null && v > 0).sort((a, b) => a - b);
+
+            // Base position defaults
+            let baseMaxRank = 50;
+            if (currentPos === 'QB' || currentPos === 'DST' || currentPos === 'K' || currentPos === 'TE') {
+                baseMaxRank = 32;
+            } else if (currentPos === 'FLX') {
+                baseMaxRank = 75;
+            }
+            let baseMaxRos = (currentPos === 'FLX') ? 160 : (currentPos === 'ALL' ? 100 : 50);
+
+            // Compute dynamic X Domain
+            let minX = 1;
+            let maxX = baseMaxRank;
+            let minPts = 4.0;
+            let maxPts = 24.0;
+
+            if (isRankMode) {
+                if (validX.length >= 4 && isClusterZoom) {
+                    const p15X = getPercentile(validX, 0.15);
+                    const p50X = getPercentile(validX, 0.50);
+                    const p85X = getPercentile(validX, 0.85);
+                    const minValX = validX[0];
+                    const hasTopOutlierX = (p15X - minValX >= 8 && p15X >= 12);
+                    if (hasTopOutlierX) {
+                        minX = Math.max(1, Math.round(p15X - Math.max(2, (p50X - p15X) * 0.35)));
+                    } else {
+                        minX = Math.max(1, Math.floor(minValX));
+                    }
+                    maxX = Math.max(minX + 20, Math.ceil(p85X + Math.max(4, (p85X - p50X) * 0.5)));
+                } else {
+                    minX = 1;
+                    maxX = Math.max(baseMaxRank, validX.length ? validX[validX.length - 1] + 4 : baseMaxRank);
+                }
+            } else {
+                // Points mode
+                if (validX.length >= 4 && isClusterZoom) {
+                    const p15Pts = getPercentile(validX, 0.15);
+                    const p50Pts = getPercentile(validX, 0.50);
+                    const p85Pts = getPercentile(validX, 0.85);
+                    const maxValPts = validX[validX.length - 1];
+                    const hasTopOutlierPts = (maxValPts - p85Pts >= 5 && maxValPts >= 18);
+                    minPts = Math.max(0, +(p15Pts - Math.max(1, (p50Pts - p15Pts) * 0.4)).toFixed(1));
+                    maxPts = hasTopOutlierPts ? Math.round(p85Pts + (p85Pts - p50Pts) * 0.35) : Math.ceil(maxValPts + 1);
+                } else {
+                    minPts = Math.max(0, Math.floor(validX[0] || 4));
+                    maxPts = Math.ceil((validX[validX.length - 1] || 24) + 1);
+                }
+            }
+
+            // Compute dynamic Y Domain (Rest of Season)
+            let minY = 1;
+            let maxY = baseMaxRos;
+
+            if (validRos.length >= 4 && isClusterZoom) {
+                const p15Y = getPercentile(validRos, 0.15);
+                const p50Y = getPercentile(validRos, 0.50);
+                const p85Y = getPercentile(validRos, 0.85);
+                const minValY = validRos[0];
+                const hasTopOutlierY = (p15Y - minValY >= 8 && p15Y >= 14);
+                if (hasTopOutlierY) {
+                    minY = Math.max(1, Math.round(p15Y - Math.max(2, (p50Y - p15Y) * 0.35)));
+                } else {
+                    minY = Math.max(1, Math.floor(minValY));
+                }
+                maxY = Math.max(minY + 25, Math.ceil(p85Y + Math.max(6, (p85Y - p50Y) * 0.5)));
+            } else {
+                minY = 1;
+                maxY = Math.max(baseMaxRos, validRos.length ? validRos[validRos.length - 1] + 5 : baseMaxRos);
+            }
 
             const xScale = val => {
                 if (isRankMode) {
-                    const safe = clamp(val != null && val > 0 ? val : maxRank, minRank, maxRank);
-                    return margin.left + ((maxRank - safe) / (maxRank - minRank)) * plotWidth;
+                    const safe = clamp(val != null && val > 0 ? val : maxX, minX, maxX);
+                    return margin.left + ((maxX - safe) / (maxX - minX)) * plotWidth;
                 } else {
                     const safe = clamp(val != null ? val : minPts, minPts, maxPts);
                     return margin.left + ((safe - minPts) / (maxPts - minPts)) * plotWidth;
@@ -209,62 +291,74 @@ var app = new Vue({
             };
 
             const yScale = ros => {
-                const safe = clamp(ros != null && ros > 0 ? ros : maxRank, minRank, maxRank);
-                return margin.top + ((safe - minRank) / (maxRank - minRank)) * plotHeight;
+                const safe = clamp(ros != null && ros > 0 ? ros : maxY, minY, maxY);
+                return margin.top + ((safe - minY) / (maxY - minY)) * plotHeight;
             };
 
             const midX = margin.left + plotWidth / 2;
             const midY = margin.top + plotHeight / 2;
 
-            const plottedPlayers = rawList.map(p => {
-                let displayPts = p.pts;
-                if (displayPts == null && p.weekRank) {
-                    if (p.pos === 'QB') displayPts = Math.max(10, +(26 - p.weekRank * 0.45).toFixed(1));
-                    else if (p.pos === 'DST' || p.pos === 'K') displayPts = Math.max(3, +(12 - p.weekRank * 0.28).toFixed(1));
-                    else displayPts = Math.max(4, +(22 - p.weekRank * 0.35).toFixed(1));
+            let outlierCount = 0;
+            const plottedPlayers = preparedPlayers.map(p => {
+                const xVal = isRankMode ? p.weekRank : p.displayPts;
+                const effRos = p.effRos || maxY;
+
+                const isOutlierX = isRankMode
+                    ? (p.weekRank != null && p.weekRank < minX)
+                    : (p.displayPts != null && p.displayPts > maxPts);
+                const isOutlierY = (p.effRos != null && p.effRos < minY);
+                const isOutlier = isClusterZoom && (isOutlierX || isOutlierY);
+
+                if (isOutlier) outlierCount++;
+
+                let rawCx = xScale(xVal);
+                let rawCy = yScale(effRos);
+
+                let cx = rawCx;
+                let cy = rawCy;
+                if (isOutlier) {
+                    cx = clamp(rawCx, margin.left + 10, margin.left + plotWidth - 10);
+                    cy = clamp(rawCy, margin.top + 10, margin.top + plotHeight - 10);
                 }
 
-                const cx = xScale(isRankMode ? p.weekRank : displayPts);
-                const effRos = p.rosRank != null && p.rosRank > 0 ? p.rosRank : (p.weekRank != null ? p.weekRank : maxRank);
-                const cy = yScale(effRos);
-
                 let dotColor = '#94a3b8';
-                let strokeColor = '#64748b';
-                let radius = 5.5;
+                let strokeColor = isOutlier ? '#f59e0b' : '#64748b';
+                let strokeWidth = isOutlier ? 2.5 : 2;
+                let radius = isOutlier ? 7.5 : 5.5;
 
                 if (p.status === 'pickup') {
                     dotColor = '#10b981';
-                    strokeColor = '#059669';
-                    radius = 8;
+                    strokeColor = isOutlier ? '#f59e0b' : '#059669';
+                    radius = isOutlier ? 8.5 : 8;
                 } else if (p.status === 'drop') {
                     dotColor = '#f43f5e';
-                    strokeColor = '#e11d48';
-                    radius = 7.5;
+                    strokeColor = isOutlier ? '#f59e0b' : '#e11d48';
+                    radius = isOutlier ? 8.5 : 7.5;
                 } else if (p.status === 'roster') {
                     dotColor = '#3b82f6';
-                    strokeColor = '#2563eb';
-                    radius = 6.5;
+                    strokeColor = isOutlier ? '#f59e0b' : '#2563eb';
+                    radius = isOutlier ? 7.5 : 6.5;
                 }
 
                 let whisker = null;
-                if (isRankMode) {
+                if (isRankMode && !isOutlierX) {
                     if (currentPos !== 'FLX' && p.minRank && p.maxRank) {
-                        const xMin = xScale(p.minRank);
-                        const xMax = xScale(p.maxRank);
+                        const wMin = xScale(p.minRank);
+                        const wMax = xScale(p.maxRank);
                         whisker = {
-                            x1: Math.min(xMin, xMax),
-                            x2: Math.max(xMin, xMax),
+                            x1: Math.min(wMin, wMax),
+                            x2: Math.max(wMin, wMax),
                             y: cy,
                             strokeColor: strokeColor,
                             opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
                         };
                     } else if (currentPos === 'FLX' && p.stdDev && p.weekRank) {
                         const spread = Math.max(2, Math.round(p.stdDev * 1.8));
-                        const xMin = xScale(Math.max(1, p.weekRank - spread));
-                        const xMax = xScale(p.weekRank + spread);
+                        const wMin = xScale(Math.max(1, p.weekRank - spread));
+                        const wMax = xScale(p.weekRank + spread);
                         whisker = {
-                            x1: Math.min(xMin, xMax),
-                            x2: Math.max(xMin, xMax),
+                            x1: Math.min(wMin, wMax),
+                            x2: Math.max(wMin, wMax),
                             y: cy,
                             strokeColor: strokeColor,
                             opacity: (p.status === 'pickup' || p.status === 'drop') ? 0.9 : 0.45
@@ -273,7 +367,15 @@ var app = new Vue({
                 }
 
                 let label = null;
-                if (p.status === 'pickup' || p.status === 'drop' || (p.status === 'roster' && (p.weekRank <= 3 || p.rosRank <= 3))) {
+                if (isOutlier) {
+                    label = {
+                        text: '★ ' + p.name + ' (#' + (p.weekRank || '-') + ')',
+                        x: cx - 12,
+                        y: cy + 4,
+                        anchor: 'end',
+                        color: '#d97706'
+                    };
+                } else if (p.status === 'pickup' || p.status === 'drop' || (p.status === 'roster' && (p.weekRank <= minX + 3 || p.effRos <= minY + 3))) {
                     const lastName = p.name.split(' ').pop();
                     const isPickup = (p.status === 'pickup');
                     label = {
@@ -287,13 +389,13 @@ var app = new Vue({
 
                 return {
                     ...p,
-                    displayPts: displayPts,
-                    effRos: effRos,
                     cx: cx,
                     cy: cy,
                     dotColor: dotColor,
                     strokeColor: strokeColor,
+                    strokeWidth: strokeWidth,
                     radius: radius,
+                    isOutlier: isOutlier,
                     whisker: whisker,
                     label: label
                 };
@@ -335,11 +437,17 @@ var app = new Vue({
                 plotHeight,
                 midX,
                 midY,
-                minRank,
-                maxRank,
+                minX: isRankMode ? minX : minPts,
+                maxX: isRankMode ? maxX : maxPts,
+                minY,
+                maxY,
+                minRank: isRankMode ? minX : 1,
+                maxRank: isRankMode ? maxX : baseMaxRank,
                 minPts,
                 maxPts,
                 isRankMode,
+                isClusterZoom,
+                outlierCount,
                 players: plottedPlayers,
                 upgradeVectors: upgradeVectors
             };
@@ -858,6 +966,10 @@ var app = new Vue({
 
         setMatrixXMode(mode) {
             this.matrixXMode = mode;
+        },
+
+        setMatrixZoom(zoom) {
+            this.matrixZoom = zoom;
         },
 
         onMatrixPlayerHover(player, event) {
