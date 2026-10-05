@@ -169,12 +169,15 @@
 /* Matrix Chart SVG Elements */
 .matrix-chart-container {
     position: relative;
+    touch-action: none;
 }
 
 .matrix-svg {
     width: 100%;
     height: 100%;
     display: block;
+    touch-action: none;
+    cursor: grab;
 }
 
 .quadrant-label {
@@ -222,6 +225,26 @@
     filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
 }
 
+.matrix-select-ring {
+    pointer-events: none;
+}
+
+.matrix-select-pulse {
+    animation: select-pulse 1.8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes select-pulse {
+    0%, 100% {
+        opacity: 0.35;
+        stroke-width: 1.5;
+    }
+    50% {
+        opacity: 0.95;
+        stroke-width: 2.5;
+    }
+}
+
 .matrix-tooltip {
     position: absolute;
     pointer-events: none;
@@ -236,3 +259,16 @@
     transform: translate(-50%, -100%);
     transition: transform 0.08s ease;
 }
+
+/* Clickable Table Rows that link to Matrix Chart */
+.lineup-table tr.clickable-player,
+.rankings-table tr.clickable-player {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.lineup-table tr.clickable-player:hover,
+.rankings-table tr.clickable-player:hover {
+    filter: brightness(0.96);
+}
+

@@ -320,6 +320,97 @@
 
             <!-- Results Section (Lineup, Matrix & Rankings) -->
             <div v-if="ready && lineupReady" class="mt-6">
+                <!-- Executive Roster Decision Report (AI-Evaluated Moves & Confidence) -->
+                <div v-if="opinionatedMoves" class="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 select-none">
+                    <div class="flex items-center justify-between flex-wrap gap-2 pb-3 mb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <span class="flex h-3 w-3 relative">
+                                <span v-if="opinionatedMoves.hasUrgentMoves" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3" :class="opinionatedMoves.hasUrgentMoves ? 'bg-emerald-500' : 'bg-blue-500'"></span>
+                            </span>
+                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Weekly Roster Action Report</h2>
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                  :class="opinionatedMoves.hasUrgentMoves ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'">
+                                {{ opinionatedMoves.hasUrgentMoves ? opinionatedMoves.urgentCount + ' High-Confidence Move' + (opinionatedMoves.urgentCount > 1 ? 's' : '') : 'Lineup Optimized' }}
+                            </span>
+                        </div>
+                        <span class="text-xs text-slate-400">Deterministic Confidence Evaluation</span>
+                    </div>
+
+                    <!-- Moves Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3" v-if="opinionatedMoves.hasUrgentMoves || (opinionatedMoves.strongAdds && opinionatedMoves.strongAdds.length > 0)">
+                        <!-- Must Adds / Strong Adds -->
+                        <div v-if="opinionatedMoves.mustAdds.length > 0 || opinionatedMoves.strongAdds.length > 0" class="space-y-2">
+                            <div class="text-xs font-bold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                                <span>&#9733; Priority Add Recommendations</span>
+                            </div>
+                            <div v-for="pk in [...opinionatedMoves.mustAdds, ...opinionatedMoves.strongAdds]" :key="'rec-add-' + pk.name"
+                                 @click="selectPlayerByName(pk.name)"
+                                 class="p-3 rounded-lg border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 transition cursor-pointer flex items-start justify-between gap-2.5">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-bold text-slate-900 text-sm">{{ pk.name }}</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white uppercase">{{ pk.confidenceShortBadge }}</span>
+                                        <span class="text-xs font-semibold text-emerald-700">{{ pk.position }} • {{ pk.team || 'FA' }}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-600 mt-1 leading-snug">{{ pk.rationale }}</p>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <div class="text-xs font-bold text-emerald-600">{{ pk.confidence }}%</div>
+                                    <div class="text-[10px] text-slate-400 font-medium">Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Must Drops / Strong Drops -->
+                        <div v-if="opinionatedMoves.mustDrops.length > 0 || opinionatedMoves.strongDrops.length > 0" class="space-y-2">
+                            <div class="text-xs font-bold text-rose-800 uppercase tracking-wide flex items-center gap-1.5">
+                                <span>&#10005; Safe Drop Recommendations</span>
+                            </div>
+                            <div v-for="dp in [...opinionatedMoves.mustDrops, ...opinionatedMoves.strongDrops]" :key="'rec-drop-' + dp.name"
+                                 @click="selectPlayerByName(dp.name)"
+                                 class="p-3 rounded-lg border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 transition cursor-pointer flex items-start justify-between gap-2.5">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-bold text-slate-900 text-sm">{{ dp.name }}</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-600 text-white uppercase">{{ dp.confidenceShortBadge }}</span>
+                                        <span class="text-xs font-semibold text-rose-700">{{ dp.position }}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-600 mt-1 leading-snug">{{ dp.rationale }}</p>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <div class="text-xs font-bold text-rose-600">{{ dp.confidence }}%</div>
+                                    <div class="text-[10px] text-slate-400 font-medium">Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stash Warnings (if any) -->
+                    <div v-if="opinionatedMoves.stashWarnings && opinionatedMoves.stashWarnings.length > 0" class="mt-3 pt-2.5 border-t border-slate-100">
+                        <div class="flex items-center gap-2 text-xs text-amber-800 font-semibold mb-1">
+                            <span>&#9888; Bench Stash Protection (Do Not Cut):</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <span v-for="sw in opinionatedMoves.stashWarnings" :key="'stash-' + sw.name"
+                                  @click="selectPlayerByName(sw.name)"
+                                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-900 hover:bg-amber-100 transition cursor-pointer">
+                                <strong>{{ sw.name }}</strong> ({{ sw.position }}): {{ sw.stashNote || 'Top ROS asset' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- No Urgent Moves Banner -->
+                    <div v-if="!opinionatedMoves.hasUrgentMoves && (!opinionatedMoves.strongAdds || opinionatedMoves.strongAdds.length === 0)"
+                         class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
+                        <span class="text-base text-emerald-500 font-bold">&#10003;</span>
+                        <div>
+                            <strong class="text-slate-800">Your starting lineup is in top shape for Week {{ week }}.</strong>
+                            <span>No urgent high-confidence waiver adds or drops required. Any potential moves are marginal toss-ups.</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Lineup vs Waiver Value & Volatility Matrix Card -->
                 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 mb-6" v-if="matrixChartData">
                     <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-200">
@@ -368,28 +459,6 @@
                                 </button>
                             </div>
 
-                            <!-- Zoom Mode Toggle -->
-                            <div class="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
-                                <button type="button"
-                                        @click="setMatrixZoom('cluster')"
-                                        :class="matrixZoom === 'cluster' 
-                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
-                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
-                                        class="px-2.5 py-1 text-xs rounded-md transition-all"
-                                        title="Auto-zoom and center on the bulk of players, pinning extreme outliers to the edge">
-                                    Cluster Focus
-                                </button>
-                                <button type="button"
-                                        @click="setMatrixZoom('fit')"
-                                        :class="matrixZoom === 'fit' 
-                                            ? 'bg-white text-slate-900 font-semibold shadow-xs' 
-                                            : 'text-slate-600 hover:text-slate-900 font-medium'"
-                                        class="px-2.5 py-1 text-xs rounded-md transition-all"
-                                        title="Fit all players from Rank #1 to maximum rank">
-                                    Fit All
-                                </button>
-                            </div>
-
                             <!-- Collapse / Expand Button -->
                             <button @click="showMatrixChart = !showMatrixChart"
                                     type="button"
@@ -403,31 +472,43 @@
 
                     <!-- Collapsible Matrix Body -->
                     <div v-show="showMatrixChart">
-                        <!-- Legend Bar -->
+                        <!-- Legend Bar (Interactive filter toggles) -->
                         <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 mb-2 px-1 select-none">
                             <div class="flex items-center flex-wrap gap-4">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                                    <span class="font-medium text-slate-700">Suggested Pickup</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-                                    <span class="font-medium text-slate-700">Suggested Drop</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
-                                    <span class="font-medium text-slate-700">My Roster</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
-                                    <span class="font-medium text-slate-700">Free Agent</span>
-                                </div>
+                                <button type="button"
+                                        @click="toggleMatrixFilter('pickup')"
+                                        :class="matrixFilters.pickup ? 'opacity-100' : 'opacity-40 line-through'"
+                                        class="flex items-center gap-1.5 transition text-xs font-medium text-slate-700 hover:opacity-80 cursor-pointer"
+                                        title="Click to toggle Suggested Pickups">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                                    <span>Suggested Pickup</span>
+                                </button>
+                                <button type="button"
+                                        @click="toggleMatrixFilter('drop')"
+                                        :class="matrixFilters.drop ? 'opacity-100' : 'opacity-40 line-through'"
+                                        class="flex items-center gap-1.5 transition text-xs font-medium text-slate-700 hover:opacity-80 cursor-pointer"
+                                        title="Click to toggle Suggested Drops">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-xs"></span>
+                                    <span>Suggested Drop</span>
+                                </button>
+                                <button type="button"
+                                        @click="toggleMatrixFilter('roster')"
+                                        :class="matrixFilters.roster ? 'opacity-100' : 'opacity-40 line-through'"
+                                        class="flex items-center gap-1.5 transition text-xs font-medium text-slate-700 hover:opacity-80 cursor-pointer"
+                                        title="Click to toggle My Roster players">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block shadow-xs"></span>
+                                    <span>My Roster</span>
+                                </button>
+                                <button type="button"
+                                        @click="toggleMatrixFilter('wire')"
+                                        :class="matrixFilters.wire ? 'opacity-100' : 'opacity-40 line-through'"
+                                        class="flex items-center gap-1.5 transition text-xs font-medium text-slate-700 hover:opacity-80 cursor-pointer"
+                                        title="Click to toggle Free Agents">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block shadow-xs"></span>
+                                    <span>Free Agent</span>
+                                </button>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div v-if="matrixChartData.outlierCount > 0 && matrixZoom === 'cluster'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-800 font-medium">
-                                    <span>★ {{ matrixChartData.outlierCount }} top performer{{ matrixChartData.outlierCount > 1 ? 's' : '' }} pinned to edge</span>
-                                    <button @click="setMatrixZoom('fit')" class="underline text-amber-900 hover:text-amber-950 font-semibold ml-0.5">Show All</button>
-                                </div>
                                 <div class="text-[11px] text-slate-400 italic hidden sm:flex items-center gap-1">
                                     <span class="inline-block w-3.5 h-0.5 bg-slate-400"></span>
                                     <span>Horizontal Whisker = Expert Spread</span>
@@ -436,8 +517,21 @@
                         </div>
 
                         <!-- SVG Chart Container -->
-                        <div class="matrix-chart-container relative w-full aspect-[16/10] bg-slate-50/75 rounded-xl border border-slate-200 select-none">
-                            <svg class="matrix-svg w-full h-full block" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <div class="matrix-chart-container relative w-full aspect-[16/10] bg-slate-50/75 rounded-xl border border-slate-200 select-none overflow-hidden touch-none"
+                             @wheel.prevent="onMatrixWheel($event)">
+                            <svg class="matrix-svg w-full h-full block"
+                                 :view-box.camel="matrixViewBoxString"
+                                 preserveAspectRatio="xMidYMid meet"
+                                 :style="{ cursor: matrixIsDragging ? 'grabbing' : 'grab', touchAction: 'none' }"
+                                 @wheel.prevent="onMatrixWheel($event)"
+                                 @mousedown="onMatrixMouseDown($event)"
+                                 @mousemove="onMatrixMouseMove($event)"
+                                 @mouseup="onMatrixMouseUp($event)"
+                                 @mouseleave="onMatrixMouseLeave($event)"
+                                 @touchstart="onMatrixTouchStart($event)"
+                                 @touchmove="onMatrixTouchMove($event)"
+                                 @touchend="onMatrixTouchEnd($event)"
+                                 @click="onMatrixSvgClick($event)">
                                 <defs>
                                     <marker id="matrix-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                                         <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981"/>
@@ -447,30 +541,56 @@
                                 <!-- 1. Quadrants Background & Labels -->
                                 <g class="quadrants-group">
                                     <!-- Top Right: Elite Studs -->
-                                    <rect :x="matrixChartData.midX" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#10b981" fill-opacity="0.04" />
+                                    <rect :x="matrixChartData.midX" :y="matrixChartData.margin.top"
+                                          :width="matrixChartData.margin.left + matrixChartData.plotWidth - matrixChartData.midX"
+                                          :height="matrixChartData.midY - matrixChartData.margin.top"
+                                          fill="#10b981" fill-opacity="0.04" />
                                     <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + 20" text-anchor="end" class="quadrant-label quadrant-studs">★ Elite Studs (Must Start)</text>
 
                                     <!-- Top Left: High-Upside Stash -->
-                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.margin.top" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#6366f1" fill-opacity="0.04" />
+                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.margin.top"
+                                          :width="matrixChartData.midX - matrixChartData.margin.left"
+                                          :height="matrixChartData.midY - matrixChartData.margin.top"
+                                          fill="#6366f1" fill-opacity="0.04" />
                                     <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + 20" text-anchor="start" class="quadrant-label quadrant-stash">✦ Upside Stashes (Hold)</text>
 
                                     <!-- Bottom Right: Streamer Gold -->
-                                    <rect :x="matrixChartData.midX" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f59e0b" fill-opacity="0.04" />
+                                    <rect :x="matrixChartData.midX" :y="matrixChartData.midY"
+                                          :width="matrixChartData.margin.left + matrixChartData.plotWidth - matrixChartData.midX"
+                                          :height="matrixChartData.margin.top + matrixChartData.plotHeight - matrixChartData.midY"
+                                          fill="#f59e0b" fill-opacity="0.04" />
                                     <text :x="matrixChartData.margin.left + matrixChartData.plotWidth - 12" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="end" class="quadrant-label quadrant-streamer">⚡ Streamer Gold (Target)</text>
 
                                     <!-- Bottom Left: Drop Candidates -->
-                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.midY" :width="matrixChartData.plotWidth/2" :height="matrixChartData.plotHeight/2" fill="#f43f5e" fill-opacity="0.04" />
+                                    <rect :x="matrixChartData.margin.left" :y="matrixChartData.midY"
+                                          :width="matrixChartData.midX - matrixChartData.margin.left"
+                                          :height="matrixChartData.margin.top + matrixChartData.plotHeight - matrixChartData.midY"
+                                          fill="#f43f5e" fill-opacity="0.04" />
                                     <text :x="matrixChartData.margin.left + 15" :y="matrixChartData.margin.top + matrixChartData.plotHeight - 15" text-anchor="start" class="quadrant-label quadrant-drop">✕ Roster Clutter (Drop)</text>
 
                                     <!-- Crosshair Dividing Lines -->
-                                    <line :x1="matrixChartData.midX" :y1="matrixChartData.margin.top" :x2="matrixChartData.midX" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
-                                    <line :x1="matrixChartData.margin.left" :y1="matrixChartData.midY" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.midY" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+                                    <line :x1="matrixChartData.midX" :y1="matrixChartData.margin.top" :x2="matrixChartData.midX" :y2="matrixChartData.height - matrixChartData.margin.bottom" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+                                    <line :x1="matrixChartData.margin.left" :y1="matrixChartData.midY" :x2="matrixChartData.width - matrixChartData.margin.right" :y2="matrixChartData.midY" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.8"/>
+
+                                    <!-- Threshold Badges on Crosshairs -->
+                                    <g :transform="'translate(' + matrixChartData.midX + ',' + (matrixChartData.margin.top - 8) + ')'" style="pointer-events: none;">
+                                        <rect x="-38" y="-10" width="76" height="15" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" opacity="0.95"/>
+                                        <text x="0" y="1" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">
+                                            Tier: {{ matrixChartData.thresholdLabelX }}
+                                        </text>
+                                    </g>
+                                    <g :transform="'translate(' + (matrixChartData.margin.left - 6) + ',' + matrixChartData.midY + ')'" style="pointer-events: none;">
+                                        <rect x="-44" y="-7.5" width="40" height="15" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" opacity="0.95"/>
+                                        <text x="-24" y="3.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">
+                                            {{ matrixChartData.thresholdLabelY }}
+                                        </text>
+                                    </g>
 
                                     <!-- Diagonal Equality Vector (Rank mode only) -->
-                                    <line v-if="matrixChartData.isRankMode"
-                                          :x1="matrixChartData.margin.left + matrixChartData.plotWidth" :y1="matrixChartData.margin.top"
-                                          :x2="matrixChartData.margin.left" :y2="matrixChartData.margin.top + matrixChartData.plotHeight"
-                                          stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                                    <line v-if="matrixChartData.isRankMode && matrixChartData.diagX1 && matrixChartData.diagX2"
+                                          :x1="matrixChartData.diagX1" :y1="matrixChartData.diagY1"
+                                          :x2="matrixChartData.diagX2" :y2="matrixChartData.diagY2"
+                                          stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" opacity="0.45"/>
                                 </g>
 
                                 <!-- 2. Axes Lines & Labels -->
@@ -488,12 +608,26 @@
                                     </text>
                                 </g>
 
-                                <!-- 3. Upgrade Vector Lines (Drop -> Pickup) -->
+                                <!-- 3. Upgrade Vector Lines (Drop -> Pickup) with Confidence Badges -->
                                 <g class="upgrade-vectors-group">
-                                    <line v-for="(v, vIdx) in matrixChartData.upgradeVectors" :key="'vec-' + vIdx"
-                                          :x1="v.x1" :y1="v.y1" :x2="v.x2" :y2="v.y2"
-                                          stroke="#10b981" stroke-width="2.5" stroke-dasharray="5,4"
-                                          marker-end="url(#matrix-arrow)" opacity="0.85" />
+                                    <g v-for="(v, vIdx) in matrixChartData.upgradeVectors" :key="'vec-' + vIdx">
+                                        <line :x1="v.x1" :y1="v.y1" :x2="v.x2" :y2="v.y2"
+                                              :stroke="v.isMustAdd ? '#059669' : '#10b981'"
+                                              :stroke-width="v.isMustAdd ? 3 : 2.5" stroke-dasharray="5,4"
+                                              marker-end="url(#matrix-arrow)" opacity="0.9" />
+                                        <!-- Midpoint Confidence Badge Pill -->
+                                        <g v-if="v.confidenceBadge"
+                                           :transform="'translate(' + ((v.x1 + v.x2) / 2) + ',' + ((v.y1 + v.y2) / 2) + ')'"
+                                           style="pointer-events: none;">
+                                            <rect x="-42" y="-9" width="84" height="17" rx="8.5"
+                                                  :fill="v.isMustAdd ? '#065f46' : '#047857'"
+                                                  stroke="#6ee7b7" stroke-width="1" opacity="0.95" />
+                                            <text x="0" y="3" text-anchor="middle"
+                                                  fill="#ffffff" font-size="8.5" font-weight="700" font-family="system-ui, -apple-system, sans-serif">
+                                                {{ v.confidenceBadge }}
+                                            </text>
+                                        </g>
+                                    </g>
                                 </g>
 
                                 <!-- 4. Whiskers (Min Rank <-> Max Rank Spread) -->
@@ -511,15 +645,15 @@
                                     </template>
                                 </g>
 
-                                <!-- 5. Player Circles & Text Labels -->
+                                <!-- 5. Player Circles, Text Labels & Touch Targets -->
                                 <g class="players-group">
                                     <template v-for="(p, pIdx) in matrixChartData.players">
                                         <!-- Player Circle -->
                                         <circle :key="'dot-' + pIdx"
                                                 :cx="p.cx" :cy="p.cy" :r="p.radius"
                                                 :fill="p.dotColor" :stroke="p.strokeColor || '#ffffff'" :stroke-width="p.strokeWidth || 2"
-                                                :stroke-dasharray="p.isOutlier ? '3,2' : 'none'"
                                                 class="player-dot"
+                                                @click.stop="onMatrixPlayerClick(p, $event)"
                                                 @mouseenter="onMatrixPlayerHover(p, $event)"
                                                 @mouseleave="onMatrixPlayerLeave" />
 
@@ -532,12 +666,35 @@
                                               style="pointer-events: none; user-select: none;">
                                             {{ p.label.text }}
                                         </text>
+
+                                        <!-- Invisible Enlarged Hitbox for Mobile Touch Accessibility (Radius 20px) -->
+                                        <circle :key="'hit-' + pIdx"
+                                                :cx="p.cx" :cy="p.cy" r="20"
+                                                fill="transparent"
+                                                style="cursor: pointer; pointer-events: all; -webkit-tap-highlight-color: transparent;"
+                                                @click.stop="onMatrixPlayerClick(p, $event)"
+                                                @mouseenter="onMatrixPlayerHover(p, $event)"
+                                                @mouseleave="onMatrixPlayerLeave" />
                                     </template>
+
+                                    <!-- Selection Highlight Ring & Pulse (Active Player) -->
+                                    <g class="selection-indicator-group" v-if="activeMatrixPlayer" style="pointer-events: none;">
+                                        <!-- Outer cyan dashed ring -->
+                                        <circle :cx="activeMatrixPlayer.cx" :cy="activeMatrixPlayer.cy"
+                                                :r="(activeMatrixPlayer.radius || 7) + 5"
+                                                fill="none" stroke="#0ea5e9" stroke-width="2"
+                                                stroke-dasharray="4,2" class="matrix-select-pulse" />
+                                        <!-- Inner white contrast halo -->
+                                        <circle :cx="activeMatrixPlayer.cx" :cy="activeMatrixPlayer.cy"
+                                                :r="(activeMatrixPlayer.radius || 7) + 2"
+                                                fill="none" stroke="#ffffff" stroke-width="1.5"
+                                                opacity="0.9" class="matrix-select-ring" />
+                                    </g>
                                 </g>
                             </svg>
 
-                            <!-- Floating Tooltip -->
-                            <div class="matrix-tooltip" v-if="matrixHoverPlayer" :style="matrixTooltipPos">
+                            <!-- Floating Tooltip (Desktop Hover) -->
+                            <div class="matrix-tooltip hidden sm:block" v-if="matrixHoverPlayer && !matrixSelectedPlayer" :style="matrixTooltipPos">
                                 <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-700">
                                     <span class="font-bold text-white text-sm leading-tight">{{ matrixHoverPlayer.name }}</span>
                                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase"
@@ -575,6 +732,166 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Floating Pan & Zoom Controls -->
+                            <div class="absolute bottom-2.5 right-2.5 flex items-center gap-1 z-20 bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-lg p-1 shadow-sm text-xs select-none">
+                                <button type="button"
+                                        @click.stop="zoomMatrixBy(1.25)"
+                                        title="Zoom In"
+                                        class="w-7 h-7 flex items-center justify-center rounded text-slate-700 hover:text-slate-950 hover:bg-slate-100 active:bg-slate-200 font-bold transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                </button>
+                                <button type="button"
+                                        @click.stop="zoomMatrixBy(1 / 1.25)"
+                                        title="Zoom Out"
+                                        class="w-7 h-7 flex items-center justify-center rounded text-slate-700 hover:text-slate-950 hover:bg-slate-100 active:bg-slate-200 font-bold transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4" />
+                                    </svg>
+                                </button>
+                                <span class="px-1 text-[11px] font-semibold text-slate-600 tabular-nums min-w-[34px] text-center"
+                                      title="Current Zoom Level">
+                                    {{ matrixZoomPercent }}%
+                                </span>
+                                <button v-if="isMatrixZoomedOrPanned"
+                                        type="button"
+                                        @click.stop="resetMatrixZoom()"
+                                        title="Reset View to 100%"
+                                        class="px-2 py-1 text-[11px] font-semibold rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:bg-indigo-200 border border-indigo-200/60 transition-colors flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Reset
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Navigation & Tap Hint -->
+                        <div v-if="!matrixSelectedPlayer" class="text-[11px] text-slate-400 italic text-center mt-2 select-none flex items-center justify-center gap-2">
+                            <span>Drag to pan • Pinch or scroll wheel to zoom • Tap dot to inspect</span>
+                        </div>
+
+                        <!-- Selected Player Details Card (Mobile & Desktop) -->
+                        <div v-if="matrixSelectedPlayer" class="mt-3 p-3.5 sm:p-4 bg-slate-900 text-white rounded-xl shadow-lg border border-slate-700 animate-in select-none">
+                            <div class="flex items-start justify-between gap-3 pb-2.5 mb-2.5 border-b border-slate-800">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="text-base sm:text-lg font-bold text-white tracking-tight truncate">{{ matrixSelectedPlayer.name }}</h3>
+                                        <span class="text-xs font-semibold px-2 py-0.5 rounded uppercase"
+                                              :class="{
+                                                  'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': matrixSelectedPlayer.status === 'pickup',
+                                                  'bg-rose-500/20 text-rose-400 border border-rose-500/30': matrixSelectedPlayer.status === 'drop',
+                                                  'bg-blue-500/20 text-blue-400 border border-blue-500/30': matrixSelectedPlayer.status === 'roster',
+                                                  'bg-slate-700 text-slate-300': matrixSelectedPlayer.status === 'wire'
+                                              }">{{ matrixSelectedPlayer.status === 'wire' ? 'Free Agent' : matrixSelectedPlayer.status }}</span>
+                                        <span v-if="matrixSelectedPlayer.isTopPerformer" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">Top Performer</span>
+                                    </div>
+                                    <div class="text-xs text-slate-400 mt-0.5">
+                                        <span class="font-semibold text-slate-200">{{ matrixSelectedPlayer.pos }}</span> • {{ matrixSelectedPlayer.team || 'Free Agent' }}
+                                        <span v-if="matrixSelectedPlayer.opp" class="ml-1.5 text-slate-300">• Matchup: {{ matrixSelectedPlayer.opp }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Navigation & Close Buttons -->
+                                <div class="flex items-center gap-1.5 flex-shrink-0">
+                                    <button @click="navigateMatrixPlayer(-1)"
+                                            type="button"
+                                            class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+                                            title="Previous Player">
+                                        &#9664;
+                                    </button>
+                                    <span class="text-xs text-slate-400 font-mono px-1">{{ currentSelectedPlayerIndex + 1 }}/{{ matrixChartData.players.length }}</span>
+                                    <button @click="navigateMatrixPlayer(1)"
+                                            type="button"
+                                            class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+                                            title="Next Player">
+                                        &#9654;
+                                    </button>
+                                    <button @click="matrixSelectedPlayer = null; matrixHoverPlayer = null"
+                                            type="button"
+                                            class="p-1.5 ml-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+                                            title="Close details">
+                                        &#10005;
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Stats Grid -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                                <div class="bg-slate-800/70 p-2 rounded-lg border border-slate-700/60">
+                                    <div class="text-slate-400 text-[11px]">Weekly Consensus (ECR)</div>
+                                    <div class="text-base font-bold text-emerald-400 mt-0.5">#{{ matrixSelectedPlayer.weekRank || '-' }}</div>
+                                </div>
+                                <div class="bg-slate-800/70 p-2 rounded-lg border border-slate-700/60">
+                                    <div class="text-slate-400 text-[11px]">Rest of Season (ROS)</div>
+                                    <div class="text-base font-bold text-indigo-400 mt-0.5">#{{ matrixSelectedPlayer.rosRank || '-' }}</div>
+                                </div>
+                                <div class="bg-slate-800/70 p-2 rounded-lg border border-slate-700/60">
+                                    <div class="text-slate-400 text-[11px]">Projected Points</div>
+                                    <div class="text-base font-bold text-blue-400 mt-0.5">{{ matrixSelectedPlayer.displayPts ? matrixSelectedPlayer.displayPts + ' pts' : '-' }}</div>
+                                </div>
+                                <div class="bg-slate-800/70 p-2 rounded-lg border border-slate-700/60">
+                                    <div class="text-slate-400 text-[11px]">Expert Spread</div>
+                                    <div class="text-sm font-semibold text-amber-300 mt-0.5" v-if="matrixSelectedPlayer.minRank && matrixSelectedPlayer.maxRank">
+                                        #{{ matrixSelectedPlayer.minRank }} – #{{ matrixSelectedPlayer.maxRank }}
+                                        <span v-if="matrixSelectedPlayer.stdDev" class="text-[10px] text-slate-400"> (±{{ matrixSelectedPlayer.stdDev }})</span>
+                                    </div>
+                                    <div class="text-sm text-slate-400 mt-0.5" v-else>-</div>
+                                </div>
+                            </div>
+
+                            <!-- Recommendation Verdict & Confidence Rating -->
+                            <div v-if="matrixSelectedPlayer.confidence || matrixSelectedPlayer.rationale || matrixSelectedPlayer.isStashWarning"
+                                 class="mt-2.5 p-2.5 rounded-lg border text-xs flex flex-col gap-1.5"
+                                 :class="{
+                                     'bg-emerald-950/60 border-emerald-500/40 text-emerald-200': matrixSelectedPlayer.confidenceTier === 'MUST ADD' || matrixSelectedPlayer.confidenceTier === 'MUST START',
+                                     'bg-emerald-900/40 border-emerald-600/30 text-emerald-200': matrixSelectedPlayer.confidenceTier === 'STRONG ADD' || matrixSelectedPlayer.confidenceTier === 'STRONG START',
+                                     'bg-rose-950/60 border-rose-500/40 text-rose-200': matrixSelectedPlayer.confidenceTier === 'MUST DROP',
+                                     'bg-rose-900/40 border-rose-600/30 text-rose-200': matrixSelectedPlayer.confidenceTier === 'STRONG DROP',
+                                     'bg-amber-950/60 border-amber-500/40 text-amber-200': matrixSelectedPlayer.isStashWarning,
+                                     'bg-slate-800/80 border-slate-700 text-slate-300': !matrixSelectedPlayer.confidenceTier && !matrixSelectedPlayer.isStashWarning
+                                 }">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="font-bold uppercase tracking-wide">
+                                            {{ matrixSelectedPlayer.confidenceBadge || (matrixSelectedPlayer.isStashWarning ? '✦ BENCH STASH' : 'OPTIMIZER VERDICT') }}
+                                        </span>
+                                        <span v-if="matrixSelectedPlayer.ptsDelta" class="opacity-85 text-[11px]">
+                                            ({{ matrixSelectedPlayer.ptsDelta > 0 ? '+' : '' }}{{ matrixSelectedPlayer.ptsDelta }} pts)
+                                        </span>
+                                    </div>
+                                    <div v-if="matrixSelectedPlayer.confidence" class="flex items-center gap-1.5 flex-shrink-0">
+                                        <span class="font-mono font-bold">{{ matrixSelectedPlayer.confidence }}%</span>
+                                        <div class="w-14 bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                                            <div class="h-full rounded-full transition-all"
+                                                 :style="{ width: matrixSelectedPlayer.confidence + '%' }"
+                                                 :class="{
+                                                     'bg-emerald-400': matrixSelectedPlayer.confidence >= 70,
+                                                     'bg-amber-400': matrixSelectedPlayer.confidence >= 55 && matrixSelectedPlayer.confidence < 70,
+                                                     'bg-rose-400': matrixSelectedPlayer.confidence < 55
+                                                 }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-if="matrixSelectedPlayer.rationale" class="text-slate-300 leading-snug">
+                                    {{ matrixSelectedPlayer.rationale }}
+                                </p>
+                                <p v-else-if="matrixSelectedPlayer.stashNote" class="text-amber-200 leading-snug">
+                                    {{ matrixSelectedPlayer.stashNote }}
+                                </p>
+                            </div>
+
+                            <!-- Recommendation Action Context (Pickup or Drop details) -->
+                            <div v-if="matrixSelectedPlayer.targetDrop" class="mt-2.5 pt-2 border-t border-slate-800 text-xs flex flex-wrap items-center justify-between gap-2 text-emerald-300">
+                                <span>&#9889; <strong>Suggested Pickup:</strong> Replaces <span class="underline">{{ matrixSelectedPlayer.targetDrop }}</span></span>
+                                <button @click="selectPlayerByName(matrixSelectedPlayer.targetDrop)" class="text-[11px] bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-emerald-400 border border-emerald-500/30 transition cursor-pointer">View {{ matrixSelectedPlayer.targetDrop }} &rarr;</button>
+                            </div>
+                            <div v-else-if="matrixSelectedPlayer.targetPickup" class="mt-2.5 pt-2 border-t border-slate-800 text-xs flex flex-wrap items-center justify-between gap-2 text-rose-300">
+                                <span>&#10005; <strong>Drop Candidate:</strong> Replaced by <span class="underline">{{ matrixSelectedPlayer.targetPickup }}</span></span>
+                                <button @click="selectPlayerByName(matrixSelectedPlayer.targetPickup)" class="text-[11px] bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-rose-400 border border-rose-500/30 transition cursor-pointer">View {{ matrixSelectedPlayer.targetPickup }} &rarr;</button>
+                            </div>
                         </div>
 
                         <!-- Quadrant Explanatory Footer Cards -->
@@ -605,12 +922,32 @@
                     <div class="w-full lg:w-72 xl:w-80 flex-shrink-0">
                         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
                             <!-- 1. Optimal Lineup Section -->
-                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Optimal Lineup</h2>
+                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100 flex items-center justify-between">
+                                <span>Optimal Lineup</span>
+                                <span class="text-[10px] text-slate-400 font-normal lowercase tracking-normal hidden sm:inline">click player to view in matrix</span>
+                            </h2>
                             <table class="lineup-table">
                                 <tbody>
-                                    <tr v-for="(slotItem, idx) in optimalLineup" :key="'opt-' + idx" :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok'}">
+                                    <tr v-for="(slotItem, idx) in optimalLineup" :key="'opt-' + idx"
+                                        @click="selectPlayerByName(slotItem.name)"
+                                        :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok', 'clickable-player': slotItem.name && slotItem.name !== '(Empty Slot)'}"
+                                        :title="slotItem.name && slotItem.name !== '(Empty Slot)' ? 'Click to highlight ' + slotItem.name + ' on Decision Matrix' : ''">
                                         <td class="pos-cell">{{ slotItem.slot }}</td>
-                                        <td class="name-cell" :title="slotItem.name">{{ slotItem.name }}</td>
+                                        <td class="name-cell" :title="slotItem.name">
+                                            <div class="flex items-center justify-between gap-1">
+                                                <span class="truncate">{{ slotItem.name }}</span>
+                                                <span v-if="slotItem.confidenceShortBadge && slotItem.highlight === 'pickup'"
+                                                      class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0"
+                                                      :class="{
+                                                          'bg-emerald-200 text-emerald-900 border border-emerald-400': slotItem.confidenceTier === 'MUST ADD',
+                                                          'bg-emerald-100 text-emerald-800 border border-emerald-300': slotItem.confidenceTier !== 'MUST ADD'
+                                                      }">{{ slotItem.confidenceShortBadge }}</span>
+                                                <span v-else-if="slotItem.confidenceShortBadge && slotItem.highlight === 'start'"
+                                                      class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0 bg-blue-100 text-blue-800 border border-blue-300">
+                                                    {{ slotItem.confidenceShortBadge }}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td class="rank-cell">{{ slotItem.rank === '-' ? '-' : '#' + slotItem.rank }}</td>
                                     </tr>
                                 </tbody>
@@ -621,9 +958,23 @@
                                 <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Bench</h2>
                                 <table class="lineup-table" v-if="benchPlayers.length > 0">
                                     <tbody>
-                                        <tr v-for="(benchItem, bIdx) in benchPlayers" :key="'bench-' + bIdx" :class="{'bench-rec': benchItem.highlight === 'bench'}">
+                                        <tr v-for="(benchItem, bIdx) in benchPlayers" :key="'bench-' + bIdx"
+                                            @click="selectPlayerByName(benchItem.name)"
+                                            :class="{'bench-rec': benchItem.highlight === 'bench', 'clickable-player': true}"
+                                            :title="'Click to highlight ' + benchItem.name + ' on Decision Matrix'">
                                             <td class="pos-cell">{{ benchItem.position || benchItem.slot }}</td>
-                                            <td class="name-cell" :title="benchItem.name">{{ benchItem.name }}</td>
+                                            <td class="name-cell" :title="benchItem.name">
+                                                <div class="flex items-center justify-between gap-1">
+                                                    <span class="truncate">{{ benchItem.name }}</span>
+                                                    <span v-if="benchItem.isStashWarning"
+                                                          class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex-shrink-0"
+                                                          title="Key ROS Stash - Do Not Drop">STASH</span>
+                                                    <span v-else-if="benchItem.confidenceShortBadge && benchItem.highlight === 'bench'"
+                                                          class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 flex-shrink-0">
+                                                        {{ benchItem.confidenceShortBadge }}
+                                                    </span>
+                                                </div>
+                                            </td>
                                             <td class="rank-cell">{{ benchItem.rank === '-' ? '-' : '#' + benchItem.rank }}</td>
                                         </tr>
                                     </tbody>
@@ -636,9 +987,22 @@
                                 <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">Drop</h2>
                                 <table class="lineup-table" v-if="dropPlayers.length > 0">
                                     <tbody>
-                                        <tr v-for="(dropItem, dIdx) in dropPlayers" :key="'drop-' + dIdx" class="drop-rec">
+                                        <tr v-for="(dropItem, dIdx) in dropPlayers" :key="'drop-' + dIdx"
+                                            @click="selectPlayerByName(dropItem.name)"
+                                            class="drop-rec clickable-player"
+                                            :title="'Click to highlight ' + dropItem.name + ' on Decision Matrix'">
                                             <td class="pos-cell">{{ dropItem.position || dropItem.slot }}</td>
-                                            <td class="name-cell" :title="dropItem.name">{{ dropItem.name }}</td>
+                                            <td class="name-cell" :title="dropItem.name">
+                                                <div class="flex items-center justify-between gap-1">
+                                                    <span class="truncate">{{ dropItem.name }}</span>
+                                                    <span v-if="dropItem.confidenceShortBadge"
+                                                          class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0"
+                                                          :class="{
+                                                              'bg-rose-200 text-rose-900 border border-rose-400': dropItem.confidenceTier === 'MUST DROP',
+                                                              'bg-rose-100 text-rose-800 border border-rose-300': dropItem.confidenceTier !== 'MUST DROP'
+                                                          }">{{ dropItem.confidenceShortBadge }}</span>
+                                                </div>
+                                            </td>
                                             <td class="rank-cell">{{ dropItem.rank === '-' ? '-' : '#' + dropItem.rank }}</td>
                                         </tr>
                                     </tbody>
@@ -652,9 +1016,12 @@
                     <div class="flex-1 min-w-0 space-y-6">
                         <!-- Weekly Rankings Section -->
                         <div v-if="Object.keys(positionColumns).length > 0">
-                            <div class="pb-2 mb-3 border-b border-slate-200">
-                                <h2 class="text-base font-bold text-slate-900">Weekly Rankings (Week {{ week }})</h2>
-                                <p class="text-xs text-slate-500">Top consensus players by position for this week's matchups</p>
+                            <div class="pb-2 mb-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-900">Weekly Rankings (Week {{ week }})</h2>
+                                    <p class="text-xs text-slate-500">Top consensus players by position for this week's matchups</p>
+                                </div>
+                                <span class="text-[11px] text-slate-400 italic hidden sm:inline">click any player to locate on Decision Matrix</span>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
                                 <div v-for="(colData, posKey) in positionColumns" :key="'week-' + posKey"
@@ -662,7 +1029,11 @@
                                     <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-100">{{ colData.position }}</h3>
                                     <table class="rankings-table">
                                         <tbody>
-                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx"
+                                                @click="selectPlayerByName(player.name)"
+                                                class="clickable-player"
+                                                :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}"
+                                                :title="'Click to highlight ' + player.name + ' on Decision Matrix'">
                                                 <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
                                                 <td class="name-cell" :title="player.name">{{ player.name }}</td>
                                             </tr>
@@ -674,9 +1045,12 @@
 
                         <!-- Rest of Season (ROS) Rankings Section -->
                         <div v-if="Object.keys(rosPositionColumns).length > 0">
-                            <div class="pb-2 mb-3 border-b border-slate-200">
-                                <h2 class="text-base font-bold text-slate-900">Rest of Season (ROS) Rankings</h2>
-                                <p class="text-xs text-slate-500">Consensus rest of season outlook for trades, playoffs, and long-term value</p>
+                            <div class="pb-2 mb-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-900">Rest of Season (ROS) Rankings</h2>
+                                    <p class="text-xs text-slate-500">Consensus rest of season outlook for trades, playoffs, and long-term value</p>
+                                </div>
+                                <span class="text-[11px] text-slate-400 italic hidden sm:inline">click any player to locate on Decision Matrix</span>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
                                 <div v-for="(colData, posKey) in rosPositionColumns" :key="'ros-' + posKey"
@@ -684,7 +1058,11 @@
                                     <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-100">{{ colData.position }}</h3>
                                     <table class="rankings-table">
                                         <tbody>
-                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx" :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}">
+                                            <tr v-for="(player, pIdx) in colData.players" :key="pIdx"
+                                                @click="selectPlayerByName(player.name)"
+                                                class="clickable-player"
+                                                :class="{'is-pickup': player.isPickup, 'on-my-team': player.onRoster == ownerId && !player.isPickup}"
+                                                :title="'Click to highlight ' + player.name + ' on Decision Matrix'">
                                                 <td class="rank-cell">{{ colData.position === 'FLX' ? player.flxRank : player.rank }}</td>
                                                 <td class="name-cell" :title="player.name">{{ player.name }}</td>
                                             </tr>

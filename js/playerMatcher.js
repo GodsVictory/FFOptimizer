@@ -4,6 +4,25 @@
  */
 
 const PlayerMatcher = {
+    ALIASES: {
+        'gabe davis': 'gabriel davis',
+        'gabriel davis': 'gabe davis',
+        'joshua palmer': 'josh palmer',
+        'josh palmer': 'joshua palmer',
+        'marquise brown': 'hollywood brown',
+        'hollywood brown': 'marquise brown',
+        'kenneth walker': 'ken walker',
+        'ken walker': 'kenneth walker',
+        'mitch trubisky': 'mitchell trubisky',
+        'mitchell trubisky': 'mitch trubisky',
+        'nathaniel dell': 'tank dell',
+        'tank dell': 'nathaniel dell',
+        'chigoziem okonkwo': 'chig okonkwo',
+        'chig okonkwo': 'chigoziem okonkwo',
+        'jeffrey wilson': 'jeff wilson',
+        'jeff wilson': 'jeffrey wilson'
+    },
+
     /**
      * Normalizes a player name for reliable O(1) matching across platforms.
      * Removes dots, apostrophes, hyphens, suffixes (Jr., Sr., II, III, IV), and extra whitespace.
@@ -111,6 +130,14 @@ const PlayerMatcher = {
                 const norm = PlayerMatcher.normalizeName(searchName);
                 if (exactMap.has(norm)) {
                     return exactMap.get(norm);
+                }
+
+                // 1b. Check alias map
+                if (PlayerMatcher.ALIASES && PlayerMatcher.ALIASES[norm]) {
+                    const aliasNorm = PlayerMatcher.normalizeName(PlayerMatcher.ALIASES[norm]);
+                    if (exactMap.has(aliasNorm)) {
+                        return exactMap.get(aliasNorm);
+                    }
                 }
 
                 // 2. Fallback: Fuzzy search with single Fuse instance (lazily created)

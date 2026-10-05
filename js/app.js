@@ -51,19 +51,58 @@ var app = new Vue({
             // Matrix Chart state
             matrixPos: 'ALL',
             matrixXMode: 'rank', // 'rank' or 'pts'
-            matrixZoom: 'cluster', // 'cluster' (density-based auto-zoom) or 'fit' (fit all)
+            matrixZoom: 'fit', // 'fit' (show all unclamped) or 'cluster' (focus on starters cluster)
             matrixHoverPlayer: null,
+            matrixSelectedPlayer: null,
             matrixTooltipPos: { left: '0px', top: '0px' },
-            showMatrixChart: true
+            showMatrixChart: true,
+            opinionatedMoves: null,
+            matrixFilters: {
+                pickup: true,
+                drop: true,
+                roster: true,
+                wire: true
+            },
+
+            // Matrix Chart Pan & Zoom interactive state
+            matrixViewBox: { x: 0, y: 0, w: 800, h: 500 },
+            matrixIsDragging: false,
+            matrixHasDragged: false,
+            matrixDragStart: { clientX: 0, clientY: 0, vbX: 0, vbY: 0 },
+            matrixTouchDistance: null
         };
     },
 
     computed: {
+        matrixViewBoxString() {
+            const vb = this.matrixViewBox || { x: 0, y: 0, w: 800, h: 500 };
+            return `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+        },
+        matrixZoomPercent() {
+            return Math.round((800 / (this.matrixViewBox?.w || 800)) * 100);
+        },
+        isMatrixZoomedOrPanned() {
+            const vb = this.matrixViewBox;
+            if (!vb) return false;
+            return vb.w !== 800 || vb.x !== 0 || vb.y !== 0;
+        },
         benchPlayers() {
             return (this.fullBench || []).filter(p => p.highlight !== 'drop');
         },
         dropPlayers() {
             return (this.fullBench || []).filter(p => p.highlight === 'drop');
+        },
+        activeMatrixPlayer() {
+            return this.matrixHoverPlayer || this.matrixSelectedPlayer || null;
+        },
+        currentSelectedPlayerIndex() {
+            if (!this.matrixSelectedPlayer || !this.matrixChartData || !this.matrixChartData.players) return -1;
+            const matcher = (typeof PlayerMatcher !== 'undefined') ? PlayerMatcher : null;
+            const norm = matcher ? matcher.normalizeName(this.matrixSelectedPlayer.name) : (this.matrixSelectedPlayer.name || '').toLowerCase().trim();
+            return this.matrixChartData.players.findIndex(p => {
+                const pNorm = matcher ? matcher.normalizeName(p.name) : (p.name || '').toLowerCase().trim();
+                return pNorm === norm;
+            });
         },
         matrixChartData() {
             if (!this.lineupReady || !this.ownerId) return null;
@@ -156,19 +195,32 @@ var app = new Vue({
                         pts: full.pts != null ? full.pts : null,
                         rosRank: rosRank,
                         status: status,
+                        confidence: extra.confidence || p.confidence || full.confidence || null,
+                        confidenceTier: extra.confidenceTier || p.confidenceTier || full.confidenceTier || null,
+                        confidenceBadge: extra.confidenceBadge || p.confidenceBadge || full.confidenceBadge || null,
+                        confidenceShortBadge: extra.confidenceShortBadge || p.confidenceShortBadge || full.confidenceShortBadge || null,
+                        rationale: extra.rationale || p.rationale || full.rationale || null,
+                        rankDelta: extra.rankDelta || p.rankDelta || full.rankDelta || null,
+                        ptsDelta: extra.ptsDelta || p.ptsDelta || full.ptsDelta || null,
+                        isStashWarning: extra.isStashWarning || p.isStashWarning || full.isStashWarning || false,
                         targetDrop: extra.targetDrop || p.targetDrop || null,
                         targetPickup: extra.targetPickup || p.targetPickup || null
                     });
                 }
             };
 
-            pickups.forEach(p => addPlayer(p, 'pickup', { targetDrop: p.targetDrop }));
-            drops.forEach(p => addPlayer(p, 'drop', { targetPickup: p.targetPickup }));
-            starters.filter(p => p.highlight !== 'pickup').forEach(p => addPlayer(p, 'roster'));
-            bench.forEach(p => addPlayer(p, 'roster'));
-            selectedFreeAgents.forEach(p => addPlayer(p, 'wire'));
+            pickups.forEach(p => addPlayer(p, 'pickup', { targetDrop: p.targetDrop, ...p }));
+            drops.forEach(p => addPlayer(p, 'drop', { targetPickup: p.targetPickup, ...p }));
+            starters.filter(p => p.highlight !== 'pickup').forEach(p => addPlayer(p, 'roster', { ...p }));
+            bench.forEach(p => addPlayer(p, 'roster', { ...p }));
+            selectedFreeAgents.forEach(p => addPlayer(p, 'wire', { ...p }));
 
-            const rawList = Array.from(playerMap.values());
+            const rawList = Array.from(playerMap.values()).filter(p => {
+                if (this.matrixFilters && this.matrixFilters[p.status] === false) {
+                    return false;
+                }
+                return true;
+            });
             if (rawList.length === 0) return null;
 
             const width = 800;
@@ -176,8 +228,6 @@ var app = new Vue({
             const margin = { top: 40, right: 45, bottom: 50, left: 65 };
             const plotWidth = width - margin.left - margin.right;
             const plotHeight = height - margin.top - margin.bottom;
-
-            const isClusterZoom = this.matrixZoom === 'cluster';
 
             // 1. Gather display points and effective ROS rank for all candidates
             const preparedPlayers = rawList.map(p => {
@@ -210,137 +260,113 @@ var app = new Vue({
                 : preparedPlayers.map(p => p.displayPts).filter(v => v != null).sort((a, b) => a - b);
             const validRos = preparedPlayers.map(p => p.effRos).filter(v => v != null && v > 0).sort((a, b) => a - b);
 
-            // Base position defaults
-            let baseMaxRank = 50;
-            if (currentPos === 'QB' || currentPos === 'DST' || currentPos === 'K' || currentPos === 'TE') {
-                baseMaxRank = 32;
-            } else if (currentPos === 'FLX') {
-                baseMaxRank = 75;
-            }
-            let baseMaxRos = (currentPos === 'FLX') ? 160 : (currentPos === 'ALL' ? 100 : 50);
+            // Standard Fantasy Football Starting & ROS Thresholds
+            const THRESHOLDS = {
+                QB:  { rank: 12, pts: 17.0, ros: 12, maxRankFit: 36, maxRankCluster: 26, maxRosFit: 36, maxRosCluster: 26 },
+                RB:  { rank: 24, pts: 11.5, ros: 24, maxRankFit: 60, maxRankCluster: 42, maxRosFit: 60, maxRosCluster: 42 },
+                WR:  { rank: 30, pts: 11.5, ros: 30, maxRankFit: 70, maxRankCluster: 48, maxRosFit: 70, maxRosCluster: 48 },
+                TE:  { rank: 12, pts: 9.0,  ros: 12, maxRankFit: 36, maxRankCluster: 26, maxRosFit: 36, maxRosCluster: 26 },
+                K:   { rank: 12, pts: 7.5,  ros: 12, maxRankFit: 32, maxRankCluster: 22, maxRosFit: 32, maxRosCluster: 22 },
+                DST: { rank: 12, pts: 7.0,  ros: 12, maxRankFit: 32, maxRankCluster: 22, maxRosFit: 32, maxRosCluster: 22 },
+                FLX: { rank: 36, pts: 10.5, ros: 40, maxRankFit: 90, maxRankCluster: 60, maxRosFit: 120, maxRosCluster: 75 },
+                ALL: { rank: 24, pts: 12.0, ros: 24, maxRankFit: 60, maxRankCluster: 40, maxRosFit: 60, maxRosCluster: 40 }
+            };
+            const posThresh = THRESHOLDS[currentPos] || THRESHOLDS.ALL;
 
-            // Compute dynamic X Domain
+            // Compute highest weekly and ROS ranks across all prepared players
+            const highestPlayerRank = validX.length ? validX[validX.length - 1] : posThresh.maxRankFit;
+            const highestPlayerRos = validRos.length ? validRos[validRos.length - 1] : posThresh.maxRosFit;
+
+            // X Domain (Weekly Rank or Projected Points)
             let minX = 1;
-            let maxX = baseMaxRank;
-            let minPts = 4.0;
+            // Pad maxX so the lowest ranked player has generous breathing room and is never clamped to border
+            let maxX = Math.max(posThresh.maxRankFit, Math.ceil(highestPlayerRank + 5));
+            let minPts = 2.0;
             let maxPts = 24.0;
 
             if (isRankMode) {
-                if (validX.length >= 4 && isClusterZoom) {
-                    const p15X = getPercentile(validX, 0.15);
-                    const p50X = getPercentile(validX, 0.50);
-                    const p85X = getPercentile(validX, 0.85);
-                    const minValX = validX[0];
-                    const hasTopOutlierX = (p15X - minValX >= 8 && p15X >= 12);
-                    if (hasTopOutlierX) {
-                        minX = Math.max(1, Math.round(p15X - Math.max(2, (p50X - p15X) * 0.35)));
-                    } else {
-                        minX = Math.max(1, Math.floor(minValX));
-                    }
-                    maxX = Math.max(minX + 20, Math.ceil(p85X + Math.max(4, (p85X - p50X) * 0.5)));
-                } else {
-                    minX = 1;
-                    maxX = Math.max(baseMaxRank, validX.length ? validX[validX.length - 1] + 4 : baseMaxRank);
-                }
+                minX = 1;
             } else {
-                // Points mode
-                if (validX.length >= 4 && isClusterZoom) {
-                    const p15Pts = getPercentile(validX, 0.15);
-                    const p50Pts = getPercentile(validX, 0.50);
-                    const p85Pts = getPercentile(validX, 0.85);
-                    const maxValPts = validX[validX.length - 1];
-                    const hasTopOutlierPts = (maxValPts - p85Pts >= 5 && maxValPts >= 18);
-                    minPts = Math.max(0, +(p15Pts - Math.max(1, (p50Pts - p15Pts) * 0.4)).toFixed(1));
-                    maxPts = hasTopOutlierPts ? Math.round(p85Pts + (p85Pts - p50Pts) * 0.35) : Math.ceil(maxValPts + 1);
-                } else {
-                    minPts = Math.max(0, Math.floor(validX[0] || 4));
-                    maxPts = Math.ceil((validX[validX.length - 1] || 24) + 1);
-                }
+                const lowPt = validX.length ? validX[0] : 4.0;
+                const topPt = validX.length ? validX[validX.length - 1] : 22.0;
+                minPts = Math.max(0.0, Math.floor(lowPt - 1.5));
+                maxPts = Math.max(22.0, Math.ceil(topPt + 2.0));
             }
 
-            // Compute dynamic Y Domain (Rest of Season)
+            // Y Domain (Rest of Season)
             let minY = 1;
-            let maxY = baseMaxRos;
+            // Pad maxY so the lowest ROS player has generous breathing room and is never clamped to border
+            let maxY = Math.max(posThresh.maxRosFit, Math.ceil(highestPlayerRos + 5));
 
-            if (validRos.length >= 4 && isClusterZoom) {
-                const p15Y = getPercentile(validRos, 0.15);
-                const p50Y = getPercentile(validRos, 0.50);
-                const p85Y = getPercentile(validRos, 0.85);
-                const minValY = validRos[0];
-                const hasTopOutlierY = (p15Y - minValY >= 8 && p15Y >= 14);
-                if (hasTopOutlierY) {
-                    minY = Math.max(1, Math.round(p15Y - Math.max(2, (p50Y - p15Y) * 0.35)));
-                } else {
-                    minY = Math.max(1, Math.floor(minValY));
-                }
-                maxY = Math.max(minY + 25, Math.ceil(p85Y + Math.max(6, (p85Y - p50Y) * 0.5)));
-            } else {
-                minY = 1;
-                maxY = Math.max(baseMaxRos, validRos.length ? validRos[validRos.length - 1] + 5 : baseMaxRos);
-            }
+            // Internal padding to guarantee player dots and whiskers never touch or overlap axis boundary lines
+            const innerPad = 16;
+            const usablePlotWidth = plotWidth - innerPad * 2;
+            const usablePlotHeight = plotHeight - innerPad * 2;
 
             const xScale = val => {
                 if (isRankMode) {
-                    const safe = clamp(val != null && val > 0 ? val : maxX, minX, maxX);
-                    return margin.left + ((maxX - safe) / (maxX - minX)) * plotWidth;
+                    const safe = Math.max(minX, Math.min(maxX, val != null && val > 0 ? val : maxX));
+                    const ratio = (maxX - safe) / (maxX - minX);
+                    return margin.left + innerPad + ratio * usablePlotWidth;
                 } else {
-                    const safe = clamp(val != null ? val : minPts, minPts, maxPts);
-                    return margin.left + ((safe - minPts) / (maxPts - minPts)) * plotWidth;
+                    const safe = Math.max(minPts, Math.min(maxPts, val != null ? val : minPts));
+                    const ratio = (safe - minPts) / (maxPts - minPts);
+                    return margin.left + innerPad + ratio * usablePlotWidth;
                 }
             };
 
             const yScale = ros => {
-                const safe = clamp(ros != null && ros > 0 ? ros : maxY, minY, maxY);
-                return margin.top + ((safe - minY) / (maxY - minY)) * plotHeight;
+                const safe = Math.max(minY, Math.min(maxY, ros != null && ros > 0 ? ros : maxY));
+                const ratio = (safe - minY) / (maxY - minY);
+                return margin.top + innerPad + ratio * usablePlotHeight;
             };
 
-            const midX = margin.left + plotWidth / 2;
-            const midY = margin.top + plotHeight / 2;
+            // Dynamic Crosshair Divider lines anchored to Fantasy Football Value Thresholds
+            const targetThresholdX = isRankMode ? posThresh.rank : posThresh.pts;
+            const targetThresholdY = posThresh.ros;
+
+            const midX = xScale(targetThresholdX);
+            const midY = yScale(targetThresholdY);
+
+            const thresholdLabelX = isRankMode ? '#' + posThresh.rank : posThresh.pts + ' pts';
+            const thresholdLabelY = '#' + posThresh.ros;
+
+            // Diagonal equality vector coordinates (Weekly Rank == ROS Rank)
+            const commonMax = Math.min(maxX, maxY);
+            const diagX1 = xScale(1);
+            const diagY1 = yScale(1);
+            const diagX2 = xScale(commonMax);
+            const diagY2 = yScale(commonMax);
 
             let outlierCount = 0;
             const plottedPlayers = preparedPlayers.map(p => {
                 const xVal = isRankMode ? p.weekRank : p.displayPts;
                 const effRos = p.effRos || maxY;
 
-                const isOutlierX = isRankMode
-                    ? (p.weekRank != null && p.weekRank < minX)
-                    : (p.displayPts != null && p.displayPts > maxPts);
-                const isOutlierY = (p.effRos != null && p.effRos < minY);
-                const isOutlier = isClusterZoom && (isOutlierX || isOutlierY);
-
-                if (isOutlier) outlierCount++;
-
-                let rawCx = xScale(xVal);
-                let rawCy = yScale(effRos);
-
-                let cx = rawCx;
-                let cy = rawCy;
-                if (isOutlier) {
-                    cx = clamp(rawCx, margin.left + 10, margin.left + plotWidth - 10);
-                    cy = clamp(rawCy, margin.top + 10, margin.top + plotHeight - 10);
-                }
+                let cx = xScale(xVal);
+                let cy = yScale(effRos);
 
                 let dotColor = '#94a3b8';
-                let strokeColor = isOutlier ? '#f59e0b' : '#64748b';
-                let strokeWidth = isOutlier ? 2.5 : 2;
-                let radius = isOutlier ? 7.5 : 5.5;
+                let strokeColor = '#64748b';
+                let strokeWidth = 2;
+                let radius = 5.5;
 
                 if (p.status === 'pickup') {
                     dotColor = '#10b981';
-                    strokeColor = isOutlier ? '#f59e0b' : '#059669';
-                    radius = isOutlier ? 8.5 : 8;
+                    strokeColor = '#059669';
+                    radius = 8;
                 } else if (p.status === 'drop') {
                     dotColor = '#f43f5e';
-                    strokeColor = isOutlier ? '#f59e0b' : '#e11d48';
-                    radius = isOutlier ? 8.5 : 7.5;
+                    strokeColor = '#e11d48';
+                    radius = 7.5;
                 } else if (p.status === 'roster') {
                     dotColor = '#3b82f6';
-                    strokeColor = isOutlier ? '#f59e0b' : '#2563eb';
-                    radius = isOutlier ? 7.5 : 6.5;
+                    strokeColor = '#2563eb';
+                    radius = 6.5;
                 }
 
                 let whisker = null;
-                if (isRankMode && !isOutlierX) {
+                if (isRankMode) {
                     if (currentPos !== 'FLX' && p.minRank && p.maxRank) {
                         const wMin = xScale(p.minRank);
                         const wMax = xScale(p.maxRank);
@@ -365,16 +391,10 @@ var app = new Vue({
                     }
                 }
 
+                const isTopPerformer = (p.weekRank != null && p.weekRank <= 3) || (p.effRos != null && p.effRos <= 3);
+
                 let label = null;
-                if (isOutlier) {
-                    label = {
-                        text: '★ ' + p.name + ' (#' + (p.weekRank || '-') + ')',
-                        x: cx - 12,
-                        y: cy + 4,
-                        anchor: 'end',
-                        color: '#d97706'
-                    };
-                } else if (p.status === 'pickup' || p.status === 'drop' || (p.status === 'roster' && (p.weekRank <= minX + 3 || p.effRos <= minY + 3))) {
+                if (p.status === 'pickup' || p.status === 'drop' || (p.status === 'roster' && (p.weekRank <= 8 || p.effRos <= 8))) {
                     const lastName = p.name.split(' ').pop();
                     const isPickup = (p.status === 'pickup');
                     label = {
@@ -394,7 +414,8 @@ var app = new Vue({
                     strokeColor: strokeColor,
                     strokeWidth: strokeWidth,
                     radius: radius,
-                    isOutlier: isOutlier,
+                    isOutlier: false,
+                    isTopPerformer: isTopPerformer,
                     whisker: whisker,
                     label: label
                 };
@@ -410,7 +431,11 @@ var app = new Vue({
                         x2: pk.cx,
                         y2: pk.cy,
                         dropName: dropPlayer.name,
-                        pickupName: pk.name
+                        pickupName: pk.name,
+                        confidence: pk.confidence || 85,
+                        confidenceTier: pk.confidenceTier || 'MUST ADD',
+                        confidenceBadge: pk.confidenceShortBadge || (pk.confidence ? `${pk.confidence}% CONFIDENCE` : 'UPGRADE'),
+                        isMustAdd: pk.confidenceTier === 'MUST ADD'
                     });
                 }
             });
@@ -423,7 +448,11 @@ var app = new Vue({
                         x2: pkPlayer.cx,
                         y2: pkPlayer.cy,
                         dropName: dp.name,
-                        pickupName: pkPlayer.name
+                        pickupName: pkPlayer.name,
+                        confidence: pkPlayer.confidence || 85,
+                        confidenceTier: pkPlayer.confidenceTier || 'MUST ADD',
+                        confidenceBadge: pkPlayer.confidenceShortBadge || (pkPlayer.confidence ? `${pkPlayer.confidence}% CONFIDENCE` : 'UPGRADE'),
+                        isMustAdd: pkPlayer.confidenceTier === 'MUST ADD'
                     });
                 }
             });
@@ -436,16 +465,21 @@ var app = new Vue({
                 plotHeight,
                 midX,
                 midY,
+                thresholdLabelX,
+                thresholdLabelY,
+                diagX1,
+                diagY1,
+                diagX2,
+                diagY2,
                 minX: isRankMode ? minX : minPts,
                 maxX: isRankMode ? maxX : maxPts,
                 minY,
                 maxY,
                 minRank: isRankMode ? minX : 1,
-                maxRank: isRankMode ? maxX : baseMaxRank,
+                maxRank: isRankMode ? maxX : posThresh.maxRankFit,
                 minPts,
                 maxPts,
                 isRankMode,
-                isClusterZoom,
                 outlierCount,
                 players: plottedPlayers,
                 upgradeVectors: upgradeVectors
@@ -453,10 +487,34 @@ var app = new Vue({
         }
     },
 
+    watch: {
+        matrixViewBox: {
+            deep: true,
+            handler() {
+                this.applyMatrixViewBox();
+            }
+        },
+        matrixChartData() {
+            this.$nextTick(() => {
+                this.applyMatrixViewBox();
+                this.initMatrixWheelListener();
+            });
+        }
+    },
+
+    updated() {
+        this.initMatrixWheelListener();
+    },
+
     async mounted() {
         this.loadPreferences();
         this.loadQueryParams();
         this.loadHistory();
+
+        this.$nextTick(() => {
+            this.applyMatrixViewBox();
+            this.initMatrixWheelListener();
+        });
 
         try {
             const meta = await FantasyProsService.fetchMetadata(this.scoring);
@@ -959,51 +1017,449 @@ var app = new Vue({
             this.allRosRankedPlayers = [...rosRoster, ...rosUnrosteredMap.values()];
         },
 
+        toggleMatrixFilter(status) {
+            if (this.matrixFilters && this.matrixFilters.hasOwnProperty(status)) {
+                this.matrixFilters[status] = !this.matrixFilters[status];
+                // If currently selected player is now filtered out, clear selection
+                if (this.matrixSelectedPlayer && !this.matrixFilters[this.matrixSelectedPlayer.status]) {
+                    this.matrixSelectedPlayer = null;
+                    this.matrixHoverPlayer = null;
+                }
+            }
+        },
+
         setMatrixPos(pos) {
             this.matrixPos = pos;
+            this.resetMatrixZoom();
+            if (this.matrixSelectedPlayer) {
+                this.$nextTick(() => {
+                    const exists = this.matrixChartData?.players?.some(p => p.name === this.matrixSelectedPlayer.name);
+                    if (!exists) {
+                        this.matrixSelectedPlayer = null;
+                        this.matrixHoverPlayer = null;
+                    }
+                });
+            }
         },
 
         setMatrixXMode(mode) {
             this.matrixXMode = mode;
+            this.resetMatrixZoom();
+            if (this.matrixSelectedPlayer) {
+                this.$nextTick(() => {
+                    const updated = this.matrixChartData?.players?.find(p => p.name === this.matrixSelectedPlayer.name);
+                    if (updated) this.updateMatrixTooltipPosition(updated);
+                });
+            }
         },
 
         setMatrixZoom(zoom) {
             this.matrixZoom = zoom;
+            if (zoom === 'cluster') {
+                // Camera preset: zoom viewport into primary starters & stashes cluster
+                const vbW = Math.round(800 / 1.55);
+                const vbH = Math.round(500 / 1.55);
+                const vbX = Math.round(800 - vbW - 12);
+                const vbY = 12;
+                this.matrixViewBox = { x: vbX, y: vbY, w: vbW, h: vbH };
+                this.applyMatrixViewBox();
+            } else {
+                this.resetMatrixZoom();
+            }
+            if (this.matrixSelectedPlayer) {
+                this.$nextTick(() => {
+                    const updated = this.matrixChartData?.players?.find(p => p.name === this.matrixSelectedPlayer.name);
+                    if (updated) this.updateMatrixTooltipPosition(updated);
+                });
+            }
+        },
+
+        applyMatrixViewBox() {
+            if (typeof document === 'undefined') return;
+            const svg = document.querySelector('.matrix-svg');
+            if (svg) {
+                const vb = this.matrixViewBox || { x: 0, y: 0, w: 800, h: 500 };
+                svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+            }
+        },
+
+        initMatrixWheelListener() {
+            if (typeof document === 'undefined') return;
+            const container = document.querySelector('.matrix-chart-container');
+            if (container && !container.__hasWheelListener) {
+                container.__hasWheelListener = true;
+                container.addEventListener('wheel', (e) => {
+                    this.onMatrixWheel(e);
+                }, { passive: false });
+            }
+        },
+
+        zoomMatrixAt(px, py, factor) {
+            const minW = 800 / 4.5; // Max ~4.5x zoom
+            const maxW = 800 * 1.1; // Max slight zoom out
+            const newW = Math.max(minW, Math.min(maxW, this.matrixViewBox.w / factor));
+            const k = this.matrixViewBox.w / newW;
+            const newH = 500 * (newW / 800);
+
+            let newX = px - (px - this.matrixViewBox.x) / k;
+            let newY = py - (py - this.matrixViewBox.y) / k;
+
+            newX = Math.max(-120, Math.min(920 - newW, newX));
+            newY = Math.max(-80, Math.min(580 - newH, newY));
+
+            this.matrixViewBox = {
+                x: Math.round(newX),
+                y: Math.round(newY),
+                w: Math.round(newW),
+                h: Math.round(newH)
+            };
+
+            this.applyMatrixViewBox();
+
+            if (this.matrixHoverPlayer) {
+                this.updateMatrixTooltipPosition(this.matrixHoverPlayer);
+            }
+        },
+
+        zoomMatrixBy(factor) {
+            const cx = this.matrixViewBox.x + this.matrixViewBox.w / 2;
+            const cy = this.matrixViewBox.y + this.matrixViewBox.h / 2;
+            this.zoomMatrixAt(cx, cy, factor);
+        },
+
+        resetMatrixZoom() {
+            this.matrixViewBox = { x: 0, y: 0, w: 800, h: 500 };
+            this.matrixIsDragging = false;
+            this.matrixHasDragged = false;
+            this.applyMatrixViewBox();
+            if (this.matrixHoverPlayer) {
+                this.updateMatrixTooltipPosition(this.matrixHoverPlayer);
+            }
+        },
+
+        onMatrixWheel(event) {
+            if (!this.matrixChartData) return;
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+
+            const svg = (typeof document !== 'undefined') ? document.querySelector('.matrix-svg') : null;
+            if (!svg) return;
+            const rect = svg.getBoundingClientRect();
+            const clientX = (event.clientX != null) ? event.clientX : (rect.left + rect.width / 2);
+            const clientY = (event.clientY != null) ? event.clientY : (rect.top + rect.height / 2);
+            const ratioX = (clientX - rect.left) / (rect.width || 800);
+            const ratioY = (clientY - rect.top) / (rect.height || 500);
+            const svgPointX = this.matrixViewBox.x + ratioX * this.matrixViewBox.w;
+            const svgPointY = this.matrixViewBox.y + ratioY * this.matrixViewBox.h;
+
+            const rawFactor = Math.exp(-event.deltaY * 0.002);
+            const factor = Math.max(0.75, Math.min(1.35, rawFactor));
+            this.zoomMatrixAt(svgPointX, svgPointY, factor);
+        },
+
+        onMatrixMouseDown(event) {
+            if (event.button !== 0) return;
+            this.matrixIsDragging = true;
+            this.matrixHasDragged = false;
+            this.matrixDragStart = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                vbX: this.matrixViewBox.x,
+                vbY: this.matrixViewBox.y
+            };
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('mousemove', this.onMatrixMouseMove);
+                window.removeEventListener('mouseup', this.onMatrixMouseUp);
+                window.addEventListener('mousemove', this.onMatrixMouseMove);
+                window.addEventListener('mouseup', this.onMatrixMouseUp);
+            }
+        },
+
+        onMatrixMouseMove(event) {
+            if (!this.matrixIsDragging) return;
+            const dx = event.clientX - this.matrixDragStart.clientX;
+            const dy = event.clientY - this.matrixDragStart.clientY;
+            if (Math.hypot(dx, dy) > 5) {
+                this.matrixHasDragged = true;
+            }
+
+            const svg = (typeof document !== 'undefined') ? document.querySelector('.matrix-svg') : null;
+            if (!svg) return;
+            const rect = svg.getBoundingClientRect();
+            const scaleX = this.matrixViewBox.w / (rect.width || 800);
+            const scaleY = this.matrixViewBox.h / (rect.height || 500);
+
+            let newX = this.matrixDragStart.vbX - dx * scaleX;
+            let newY = this.matrixDragStart.vbY - dy * scaleY;
+            newX = Math.max(-120, Math.min(920 - this.matrixViewBox.w, newX));
+            newY = Math.max(-80, Math.min(580 - this.matrixViewBox.h, newY));
+
+            this.matrixViewBox.x = Math.round(newX);
+            this.matrixViewBox.y = Math.round(newY);
+            this.applyMatrixViewBox();
+
+            if (this.matrixHoverPlayer) {
+                this.updateMatrixTooltipPosition(this.matrixHoverPlayer);
+            }
+        },
+
+        onMatrixMouseUp(event) {
+            this.matrixIsDragging = false;
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('mousemove', this.onMatrixMouseMove);
+                window.removeEventListener('mouseup', this.onMatrixMouseUp);
+            }
+        },
+
+        onMatrixMouseLeave(event) {
+            this.onMatrixPlayerLeave();
+        },
+
+        onMatrixTouchStart(event) {
+            if (event.touches.length === 1) {
+                this.matrixIsDragging = true;
+                this.matrixHasDragged = false;
+                this.matrixTouchDistance = null;
+                this.matrixDragStart = {
+                    clientX: event.touches[0].clientX,
+                    clientY: event.touches[0].clientY,
+                    vbX: this.matrixViewBox.x,
+                    vbY: this.matrixViewBox.y
+                };
+            } else if (event.touches.length === 2) {
+                this.matrixIsDragging = false;
+                this.matrixHasDragged = true;
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                this.matrixTouchDistance = Math.hypot(dx, dy);
+            }
+        },
+
+        onMatrixTouchMove(event) {
+            if (event.touches.length === 1 && this.matrixIsDragging) {
+                const dx = event.touches[0].clientX - this.matrixDragStart.clientX;
+                const dy = event.touches[0].clientY - this.matrixDragStart.clientY;
+                if (Math.hypot(dx, dy) > 6) {
+                    this.matrixHasDragged = true;
+                    if (event.cancelable) event.preventDefault();
+                }
+
+                if (this.matrixHasDragged) {
+                    const svg = (typeof document !== 'undefined') ? document.querySelector('.matrix-svg') : null;
+                    if (!svg) return;
+                    const rect = svg.getBoundingClientRect();
+                    const scaleX = this.matrixViewBox.w / (rect.width || 800);
+                    const scaleY = this.matrixViewBox.h / (rect.height || 500);
+
+                    let newX = this.matrixDragStart.vbX - dx * scaleX;
+                    let newY = this.matrixDragStart.vbY - dy * scaleY;
+                    newX = Math.max(-120, Math.min(920 - this.matrixViewBox.w, newX));
+                    newY = Math.max(-80, Math.min(580 - this.matrixViewBox.h, newY));
+
+                    this.matrixViewBox.x = Math.round(newX);
+                    this.matrixViewBox.y = Math.round(newY);
+                    this.applyMatrixViewBox();
+                }
+            } else if (event.touches.length === 2 && this.matrixTouchDistance) {
+                if (event.cancelable) event.preventDefault();
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const currentDist = Math.hypot(dx, dy);
+                if (currentDist > 10 && this.matrixTouchDistance > 10) {
+                    const factor = currentDist / this.matrixTouchDistance;
+                    const midClientX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+                    const midClientY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+
+                    const svg = (typeof document !== 'undefined') ? document.querySelector('.matrix-svg') : null;
+                    if (svg) {
+                        const rect = svg.getBoundingClientRect();
+                        const ratioX = (midClientX - rect.left) / (rect.width || 800);
+                        const ratioY = (midClientY - rect.top) / (rect.height || 500);
+                        const svgPointX = this.matrixViewBox.x + ratioX * this.matrixViewBox.w;
+                        const svgPointY = this.matrixViewBox.y + ratioY * this.matrixViewBox.h;
+                        this.zoomMatrixAt(svgPointX, svgPointY, factor);
+                    }
+                    this.matrixTouchDistance = currentDist;
+                }
+            }
+        },
+
+        onMatrixTouchEnd(event) {
+            if (event.touches.length === 0) {
+                this.matrixIsDragging = false;
+                this.matrixTouchDistance = null;
+            }
+        },
+
+        updateMatrixTooltipPosition(player) {
+            if (!player) return;
+            const container = (typeof document !== 'undefined') ? document.querySelector('.matrix-chart-container') : null;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const width = rect.width || 800;
+            const height = rect.height || 500;
+
+            const vb = this.matrixViewBox || { x: 0, y: 0, w: 800, h: 500 };
+
+            // Map SVG coordinates to container pixels based on active viewBox
+            let x = ((player.cx - vb.x) / vb.w) * width;
+            let y = ((player.cy - vb.y) / vb.h) * height;
+
+            if (x < 115) x = 115;
+            if (x > width - 115) x = width - 115;
+
+            const isNearTop = y < 140;
+            const transform = isNearTop
+                ? 'translate(-50%, 14px)'
+                : 'translate(-50%, calc(-100% - 12px))';
+
+            this.matrixTooltipPos = {
+                left: `${x}px`,
+                top: `${y}px`,
+                transform: transform
+            };
         },
 
         onMatrixPlayerHover(player, event) {
             this.matrixHoverPlayer = player;
-            const container = (event && event.currentTarget)
-                ? (event.currentTarget.closest('.matrix-chart-container') || event.currentTarget.closest('svg')?.parentElement || event.currentTarget.closest('div'))
-                : null;
-            if (container) {
-                const rect = container.getBoundingClientRect();
-                const width = rect.width || 800;
-                let x = event.clientX - rect.left;
-                let y = event.clientY - rect.top;
-
-                // Clamp x within chart container bounds
-                if (x < 115) x = 115;
-                if (x > width - 115) x = width - 115;
-
-                // Smart vertical flip:
-                // If near the top (< 140px), place tooltip below the dot so it stays fully visible
-                // Otherwise place it above the dot
-                const isNearTop = y < 140;
-                const transform = isNearTop
-                    ? 'translate(-50%, 14px)'
-                    : 'translate(-50%, calc(-100% - 12px))';
-
-                this.matrixTooltipPos = {
-                    left: `${x}px`,
-                    top: `${y}px`,
-                    transform: transform
-                };
-            }
+            this.updateMatrixTooltipPosition(player);
         },
 
         onMatrixPlayerLeave() {
-            this.matrixHoverPlayer = null;
+            this.matrixHoverPlayer = this.matrixSelectedPlayer || null;
+        },
+
+        onMatrixPlayerClick(player, event) {
+            if (this.matrixHasDragged) return; // Prevent selection if user was dragging
+            if (event && event.stopPropagation) {
+                event.stopPropagation();
+            }
+            this.selectMatrixPlayer(player);
+        },
+
+        selectMatrixPlayer(player) {
+            if (!player) return;
+            if (this.matrixSelectedPlayer && this.matrixSelectedPlayer.name === player.name) {
+                this.matrixSelectedPlayer = null;
+                this.matrixHoverPlayer = null;
+            } else {
+                this.matrixSelectedPlayer = player;
+                this.matrixHoverPlayer = player;
+                this.updateMatrixTooltipPosition(player);
+            }
+        },
+
+        navigateMatrixPlayer(direction) {
+            if (!this.matrixChartData || !this.matrixChartData.players || this.matrixChartData.players.length === 0) return;
+            const list = this.matrixChartData.players;
+            let idx = this.currentSelectedPlayerIndex;
+            if (idx === -1) {
+                idx = direction > 0 ? 0 : list.length - 1;
+            } else {
+                idx = (idx + direction + list.length) % list.length;
+            }
+            const next = list[idx];
+            if (next) {
+                this.selectMatrixPlayer(next);
+            }
+        },
+
+        onMatrixSvgClick(event) {
+            if (this.matrixHasDragged) return; // Ignore drag completion
+            if (!this.matrixChartData || !this.matrixChartData.players || this.matrixChartData.players.length === 0) return;
+            const svg = (typeof document !== 'undefined') ? document.querySelector('.matrix-svg') : null;
+            if (!svg) return;
+
+            let svgX = 0;
+            let svgY = 0;
+
+            if (svg.createSVGPoint && svg.getScreenCTM) {
+                try {
+                    const pt = svg.createSVGPoint();
+                    pt.x = event.clientX;
+                    pt.y = event.clientY;
+                    const ctm = svg.getScreenCTM();
+                    if (ctm) {
+                        const transformed = pt.matrixTransform(ctm.inverse());
+                        svgX = transformed.x;
+                        svgY = transformed.y;
+                    }
+                } catch (e) {}
+            }
+
+            if (!svgX && !svgY) {
+                const rect = svg.getBoundingClientRect();
+                const vb = this.matrixViewBox || { x: 0, y: 0, w: 800, h: 500 };
+                svgX = vb.x + ((event.clientX - rect.left) / (rect.width || 800)) * vb.w;
+                svgY = vb.y + ((event.clientY - rect.top) / (rect.height || 500)) * vb.h;
+            }
+
+            // Find closest visible player within proximity threshold (scaled by current zoom)
+            const zoomScale = 800 / (this.matrixViewBox?.w || 800);
+            const threshold = Math.max(16, 36 / zoomScale);
+            let closest = null;
+            let minDist = threshold;
+            for (const p of this.matrixChartData.players) {
+                const dx = p.cx - svgX;
+                const dy = p.cy - svgY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = p;
+                }
+            }
+
+            if (closest) {
+                this.selectMatrixPlayer(closest);
+            } else {
+                this.matrixSelectedPlayer = null;
+                this.matrixHoverPlayer = null;
+            }
+        },
+
+        selectPlayerByName(name) {
+            if (!name) return;
+            const matcher = (typeof PlayerMatcher !== 'undefined') ? PlayerMatcher : null;
+            const norm = matcher ? matcher.normalizeName(name) : name.toLowerCase().trim();
+
+            let found = this.matrixChartData?.players?.find(p => {
+                const pNorm = matcher ? matcher.normalizeName(p.name) : (p.name || '').toLowerCase().trim();
+                return pNorm === norm;
+            });
+
+            if (!found && this.allRankedPlayers) {
+                const full = this.allRankedPlayers.find(p => (matcher ? matcher.normalizeName(p.name) : (p.name || '').toLowerCase().trim()) === norm);
+                if (full) {
+                    const pos = full.position || full.slot;
+                    if (['QB', 'RB', 'WR', 'TE', 'DST', 'K'].includes(pos)) {
+                        this.matrixPos = pos;
+                    } else {
+                        this.matrixPos = 'ALL';
+                    }
+                    this.$nextTick(() => {
+                        const refreshed = this.matrixChartData?.players?.find(p => (matcher ? matcher.normalizeName(p.name) : (p.name || '').toLowerCase().trim()) === norm);
+                        if (refreshed) {
+                            this.selectMatrixPlayer(refreshed);
+                            this.scrollToMatrixChart();
+                        }
+                    });
+                    return;
+                }
+            }
+
+            if (found) {
+                this.selectMatrixPlayer(found);
+                this.scrollToMatrixChart();
+            }
+        },
+
+        scrollToMatrixChart() {
+            this.$nextTick(() => {
+                const el = (typeof document !== 'undefined') ? document.querySelector('.matrix-chart-container') : null;
+                if (el && el.scrollIntoView) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
         },
 
         /**
@@ -1012,7 +1468,7 @@ var app = new Vue({
         optimize() {
             if (!this.ownerId) return;
 
-            const { optimalLineup, fullBench, benchAlerts } = OptimizerService.solveLineup(
+            const { optimalLineup, fullBench, benchAlerts, opinionatedMoves } = OptimizerService.solveLineup(
                 this.allRankedPlayers,
                 this.startingSlots,
                 this.ownerId,
@@ -1022,6 +1478,7 @@ var app = new Vue({
             this.optimalLineup = optimalLineup;
             this.fullBench = fullBench;
             this.benchAlerts = benchAlerts;
+            this.opinionatedMoves = opinionatedMoves || null;
 
             // Collect set of suggested pickup player names (normalized)
             const matcher = (typeof PlayerMatcher !== 'undefined') ? PlayerMatcher : null;

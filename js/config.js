@@ -87,8 +87,8 @@ const CONFIG = {
         'packers': 'Green Bay Packers', 'green bay': 'Green Bay Packers', 'gb': 'Green Bay Packers',
         'texans': 'Houston Texans', 'houston': 'Houston Texans', 'hou': 'Houston Texans',
         'colts': 'Indianapolis Colts', 'indianapolis': 'Indianapolis Colts', 'ind': 'Indianapolis Colts',
-        'jaguars': 'Jacksonville Jaguars', 'jacksonville': 'Jacksonville Jaguars', 'jax': 'Jacksonville Jaguars',
-        'chiefs': 'Kansas City Chiefs', 'kansas city': 'Kansas City Chiefs', 'kc': 'Kansas City Chiefs',
+        'jaguars': 'Jacksonville Jaguars', 'jacksonville': 'Jacksonville Jaguars', 'jax': 'Jacksonville Jaguars', 'jac': 'Jacksonville Jaguars',
+        'chiefs': 'Kansas City Chiefs', 'kansas city': 'Kansas City Chiefs', 'kc': 'Kansas City Chiefs', 'kan': 'Kansas City Chiefs',
         'raiders': 'Las Vegas Raiders', 'las vegas': 'Las Vegas Raiders', 'lv': 'Las Vegas Raiders', 'oakland': 'Las Vegas Raiders',
         'chargers': 'Los Angeles Chargers', 'la chargers': 'Los Angeles Chargers', 'lac': 'Los Angeles Chargers',
         'rams': 'Los Angeles Rams', 'la rams': 'Los Angeles Rams', 'lar': 'Los Angeles Rams',
@@ -104,7 +104,7 @@ const CONFIG = {
         'seahawks': 'Seattle Seahawks', 'seattle': 'Seattle Seahawks', 'sea': 'Seattle Seahawks',
         'buccaneers': 'Tampa Bay Buccaneers', 'tampa bay': 'Tampa Bay Buccaneers', 'tb': 'Tampa Bay Buccaneers',
         'titans': 'Tennessee Titans', 'tennessee': 'Tennessee Titans', 'ten': 'Tennessee Titans',
-        'commanders': 'Washington Commanders', 'washington': 'Washington Commanders', 'was': 'Washington Commanders'
+        'commanders': 'Washington Commanders', 'washington': 'Washington Commanders', 'was': 'Washington Commanders', 'wsh': 'Washington Commanders', 'football team': 'Washington Commanders'
     }
 };
 
