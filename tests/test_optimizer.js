@@ -49,6 +49,39 @@ assert.strictEqual(index.find('Christian McCaffrey').name, 'Christian McCaffrey'
 assert.strictEqual(index.find('49ers D/ST', 'DST').name, 'San Francisco 49ers');
 assert.strictEqual(index.find('San Francisco', 'DST').name, 'San Francisco 49ers');
 
+// Test Player Mismatch Prevention (Travis vs Trevor Etienne, Brian vs Bijan Robinson)
+try {
+    if (typeof Fuse === 'undefined') {
+        global.Fuse = require('./fuse.js');
+    }
+} catch (e) {}
+
+const mismatchPlayers = [
+    { id: '970693f0-0af4-4627-ac0c-bf519f7433ee', name: 'Travis Etienne', position: 'RB' },
+    { id: 'bijan-uuid', name: 'Bijan Robinson', position: 'RB' },
+    { id: 'walker-uuid', name: 'Kenneth Walker', position: 'RB' }
+];
+const mismatchIndex = PlayerMatcher.createIndex(mismatchPlayers);
+
+// 1. Travis Etienne Jr. matches Travis Etienne
+assert.strictEqual(mismatchIndex.find('Travis Etienne Jr.', 'RB').name, 'Travis Etienne');
+assert.strictEqual(mismatchIndex.find('Travis Etienne Jr.', 'RB', '970693f0-0af4-4627-ac0c-bf519f7433ee').name, 'Travis Etienne');
+
+// 2. Trevor Etienne must NEVER match Travis Etienne
+assert.strictEqual(mismatchIndex.find('Trevor Etienne', 'RB'), null);
+assert.strictEqual(mismatchIndex.find('Trevor Etienne', 'RB', '39e2d13c-0fb7-465f-ad8b-0b4bb73e1124'), null);
+
+// 3. Brian Robinson must NEVER match Bijan Robinson
+assert.strictEqual(mismatchIndex.find('Brian Robinson', 'RB'), null);
+assert.strictEqual(mismatchIndex.find('Brian Robinson Jr.', 'RB'), null);
+
+// 4. Nicknames: Ken Walker matches Kenneth Walker
+assert.strictEqual(mismatchIndex.find('Ken Walker', 'RB').name, 'Kenneth Walker');
+
+// 5. Position compatibility: QB cannot match RB
+assert.strictEqual(index.find('Patrick Mahomes', 'RB'), null);
+
+
 // Performance test: 10,000 lookups
 const start = Date.now();
 for (let i = 0; i < 10000; i++) {

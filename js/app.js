@@ -881,7 +881,7 @@ var app = new Vue({
                 const isFlex = (pos === 'FLX');
 
                 for (const fpPlayer of playerList) {
-                    const matchedRosterPlayer = index.find(fpPlayer.name, pos);
+                    const matchedRosterPlayer = index.find(fpPlayer.name, pos, fpPlayer.id);
 
                     if (matchedRosterPlayer) {
                         if (isFlex) {
@@ -963,7 +963,7 @@ var app = new Vue({
                 const isFlex = (pos === 'FLX');
 
                 for (const fpPlayer of playerList) {
-                    const matchedRosterPlayer = rosIndex.find(fpPlayer.name, pos);
+                    const matchedRosterPlayer = rosIndex.find(fpPlayer.name, pos, fpPlayer.id);
 
                     if (matchedRosterPlayer) {
                         if (isFlex) {
@@ -1001,7 +1001,7 @@ var app = new Vue({
                     }
 
                     // Attach ROS rank to matched player in allRankedPlayers (for matrix chart)
-                    const matchedWeekly = weeklyIndex.find(fpPlayer.name, pos);
+                    const matchedWeekly = weeklyIndex.find(fpPlayer.name, pos, fpPlayer.id);
                     if (matchedWeekly) {
                         if (isFlex) {
                             matchedWeekly.rosFlxRank = fpPlayer.rank;
