@@ -32,13 +32,11 @@ Supports **Sleeper**, **ESPN**, and **Yahoo Fantasy**.
 
 ```
 .
-├── .github/workflows/
-│   └── update-data.yml         # Scheduled refresh of data/*.json during the season
 ├── css/
 │   ├── app.css                 # Extracted styles, starter/bench highlights, loading overlay
 │   ├── tailwind.css            # Prebuilt Tailwind utilities (generated, committed)
 │   └── tailwind.input.css      # Tailwind build entry point
-├── data/                       # Cached weekly rankings and player metadata
+├── data/                       # Player metadata (rank files are local-only, gitignored)
 │   ├── HALF-*.json             # Half PPR rankings
 │   ├── PPR-*.json              # Full PPR rankings
 │   ├── STD-*.json              # Standard scoring rankings
@@ -98,7 +96,7 @@ python getFPData.py
 
 This updates all `data/*.json` files for the active NFL week (weeks 1–18).
 
-These files are the app's offline fallback when FantasyPros can't be reached, and `sleeperPlayers.json` maps Sleeper player IDs to names. The `Update ranking data` GitHub Action runs this script every 6 hours from August through January and commits any changes; it can also be run manually from the Actions tab.
+The app fetches rankings live from FantasyPros in the browser and caches them in localStorage. The rank files written by this script are gitignored and only serve as an offline fallback when running locally. `sleeperPlayers.json` (Sleeper player ID mapping) is committed; players missing from it are looked up from Sleeper's live player database.
 
 ---
 
@@ -117,8 +115,10 @@ npm run build:css
 
 Run the tests using Node.js:
 
+`test_real_data.js` and some live tests read the local rank files, so run `python getFPData.py` first on a fresh clone.
+
 ```bash
-# Offline tests (unit, regression, bundled-data integration, asset check)
+# Offline tests (unit, regression, local-data integration, asset check)
 npm test
 
 # Also run tests against live Sleeper / FantasyPros APIs

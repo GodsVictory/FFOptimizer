@@ -44,8 +44,6 @@ server.listen(PORT, async () => {
         '/index.html',
         '/css/app.css',
         '/css/tailwind.css',
-        '/data/lastUpdatedAt.json',
-        '/data/PPR-QB.json',
         '/js/config.js',
         '/js/playerMatcher.js',
         '/js/services/fantasyProsService.js',
