@@ -4,6 +4,9 @@
 
 const SleeperService = {
     _playersDb: null,
+    _livePlayersDb: null,
+    LIVE_DB_KEY: 'ff_sleeper_players_live',
+    LIVE_DB_TTL: 24 * 60 * 60 * 1000, // Sleeper asks clients to pull /players/nfl at most once per day
 
     /**
      * Loads the local Sleeper player database (maps sleeper player_id to sportradar_id/name/pos).
@@ -21,6 +24,69 @@ const SleeperService = {
             console.error('Failed to load data/sleeperPlayers.json:', err);
             return {};
         }
+    },
+
+    /**
+     * Fetches the full live Sleeper player database (~5MB), slimmed to fantasy positions and cached
+     * in localStorage for a day. Only used when a roster contains players missing from the bundled file
+     * (e.g. recent signings), so those players aren't silently dropped and mistaken for free agents.
+     */
+    async getLivePlayersDb() {
+        if (this._livePlayersDb) return this._livePlayersDb;
+
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const raw = localStorage.getItem(this.LIVE_DB_KEY);
+                if (raw) {
+                    const cached = JSON.parse(raw);
+                    if (cached && cached.timestamp && Date.now() - cached.timestamp < this.LIVE_DB_TTL && cached.players) {
+                        this._livePlayersDb = cached.players;
+                        return this._livePlayersDb;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        try {
+            const res = await axios.get('https://api.sleeper.app/v1/players/nfl', { timeout: 30000 });
+            const slim = {};
+            const validPositions = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
+            for (const [playerId, p] of Object.entries(res.data || {})) {
+                if (!p || !validPositions.has(p.position)) continue;
+                slim[playerId] = {
+                    position: p.position,
+                    name: p.position === 'DEF'
+                        ? `${p.first_name || ''} ${p.last_name || ''}`.trim()
+                        : (p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()),
+                    id: p.position === 'DEF' ? p.player_id : (p.sportradar_id || null)
+                };
+            }
+            this._livePlayersDb = slim;
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem(this.LIVE_DB_KEY, JSON.stringify({ timestamp: Date.now(), players: slim }));
+                }
+            } catch (e) {
+                // Quota exceeded: keep the in-memory copy only
+            }
+            return slim;
+        } catch (err) {
+            console.warn('Could not fetch live Sleeper player database:', err);
+            return {};
+        }
+    },
+
+    /**
+     * Resolves a Sleeper player id that is missing from every player database.
+     * Team defenses use the team abbreviation as their id, so those can be reconstructed.
+     */
+    resolveUnknownPlayer(playerId) {
+        const defMap = (typeof CONFIG !== 'undefined' && CONFIG.DEFENSE_CANONICAL_MAP) ? CONFIG.DEFENSE_CANONICAL_MAP : {};
+        const teamName = /^[A-Z]{2,3}$/.test(playerId) ? defMap[playerId.toLowerCase()] : null;
+        if (teamName) {
+            return { position: 'DEF', name: teamName, id: playerId };
+        }
+        return null;
     },
 
     /**
@@ -50,7 +116,7 @@ const SleeperService = {
 
         const posMap = (typeof CONFIG !== 'undefined' && CONFIG.SLEEPER_POS_MAP) 
             ? CONFIG.SLEEPER_POS_MAP 
-            : { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', K: 'K', DEF: 'DST' };
+            : { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', WRRB_FLEX: 'WRRB', REC_FLEX: 'REC', SUPER_FLEX: 'SFLX', K: 'K', DEF: 'DST' };
 
         // 1. Parse starting roster slots (e.g. ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'])
         const startingSlots = [];
@@ -79,7 +145,19 @@ const SleeperService = {
             };
         }).sort((a, b) => a.owner.localeCompare(b.owner));
 
-        // 4. Map rostered players
+        // 4. Map rostered players, filling gaps in the bundled player file from the live Sleeper database
+        const missingIds = [];
+        for (const roster of rosters) {
+            for (const playerId of (roster.players || [])) {
+                if (!playersDb[playerId]) missingIds.push(playerId);
+            }
+        }
+        let liveDb = {};
+        if (missingIds.length > 0) {
+            liveDb = await this.getLivePlayersDb();
+        }
+        const unresolved = [];
+
         const rosteredPlayers = [];
         for (const roster of rosters) {
             const rosterId = roster.roster_id;
@@ -87,8 +165,11 @@ const SleeperService = {
 
             if (Array.isArray(roster.players)) {
                 for (const playerId of roster.players) {
-                    const pData = playersDb[playerId];
-                    if (!pData) continue;
+                    const pData = playersDb[playerId] || liveDb[playerId] || this.resolveUnknownPlayer(playerId);
+                    if (!pData) {
+                        unresolved.push(playerId);
+                        continue;
+                    }
 
                     const position = posMap[pData.position] || pData.position;
                     const isStarter = starterSet.has(playerId);
@@ -126,8 +207,13 @@ const SleeperService = {
             }
         }
 
+        if (unresolved.length > 0) {
+            console.warn(`Sleeper: ${unresolved.length} rostered player(s) could not be identified:`, unresolved);
+        }
+
         return {
             leagueName: (league && league.name) ? league.name : '',
+            unresolvedPlayers: unresolved.length,
             startingSlots,
             owners,
             rosteredPlayers,

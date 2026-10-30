@@ -32,12 +32,17 @@ Supports **Sleeper**, **ESPN**, and **Yahoo Fantasy**.
 
 ```
 .
+├── .github/workflows/
+│   └── update-data.yml         # Scheduled refresh of data/*.json during the season
 ├── css/
-│   └── app.css                 # Extracted styles, starter/bench highlights, loading overlay
+│   ├── app.css                 # Extracted styles, starter/bench highlights, loading overlay
+│   ├── tailwind.css            # Prebuilt Tailwind utilities (generated, committed)
+│   └── tailwind.input.css      # Tailwind build entry point
 ├── data/                       # Cached weekly rankings and player metadata
 │   ├── HALF-*.json             # Half PPR rankings
 │   ├── PPR-*.json              # Full PPR rankings
 │   ├── STD-*.json              # Standard scoring rankings
+│   ├── ROS-*.json              # Rest-of-season rankings
 │   ├── lastUpdatedAt.json      # Metadata timestamp and active NFL week
 │   └── sleeperPlayers.json     # Sleeper player database mapping
 ├── js/
@@ -51,11 +56,15 @@ Supports **Sleeper**, **ESPN**, and **Yahoo Fantasy**.
 │   │   └── optimizerService.js # Core lineup solver and bench alerts
 │   └── app.js                  # Main Vue 2 application controller
 ├── tests/
+│   ├── run_all.js              # Test runner (offline by default, --live adds network tests)
 │   ├── test_optimizer.js       # Unit tests for matcher, Yahoo parser, and optimizer
+│   ├── test_fixes.js           # Regression tests: slot parsing, drops, free agents, caching
 │   ├── test_real_data.js       # End-to-end integration test against repository data
 │   └── serve_check.js          # HTTP static asset validation
 ├── getFPData.py                # Python scraper to update weekly FantasyPros consensus ranks
 ├── index.html                  # Main web application entry point
+├── tailwind.config.js          # Tailwind theme + content paths
+├── _config.yml                 # GitHub Pages: keeps dev-only files off the site
 └── README.md
 ```
 
@@ -89,19 +98,29 @@ python getFPData.py
 
 This updates all `data/*.json` files for the active NFL week (weeks 1–18).
 
+These files are the app's offline fallback when FantasyPros can't be reached, and `sleeperPlayers.json` maps Sleeper player IDs to names. The `Update ranking data` GitHub Action runs this script every 6 hours from August through January and commits any changes; it can also be run manually from the Actions tab.
+
+---
+
+## Styling
+
+Tailwind CSS is prebuilt rather than loaded from the Play CDN. After adding or changing Tailwind classes in `index.html` or `js/`, rebuild and commit the stylesheet:
+
+```bash
+npm install
+npm run build:css
+```
+
 ---
 
 ## Running Tests
 
-Run the unit and integration tests using Node.js:
+Run the tests using Node.js:
 
 ```bash
-# Run unit tests
-node tests/test_optimizer.js
+# Offline tests (unit, regression, bundled-data integration, asset check)
+npm test
 
-# Run real data integration test
-node tests/test_real_data.js
-
-# Run HTTP server asset check
-node tests/serve_check.js
+# Also run tests against live Sleeper / FantasyPros APIs
+npm run test:live
 ```

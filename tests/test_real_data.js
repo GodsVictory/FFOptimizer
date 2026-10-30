@@ -27,21 +27,24 @@ for (const pos of positions) {
     console.log(`[+] Loaded actual STD-${pos}.json: ${fpData[pos].length} players`);
 }
 
-// 2. Sample Yahoo roster to match against actual rankings
-const yahooRosterText = `
-Pos	Player	Opp	Status
-QB	Josh Allen Buf - QB	vsARI	Sun 1:00pm
-RB	Breece Hall NYJ - RB	@SF	Mon 8:15pm
-RB	Bijan Robinson Atl - RB	vsPIT	Sun 1:00pm
-WR	CeeDee Lamb Dal - WR	@CLE	Sun 4:25pm
-WR	Justin Jefferson Min - WR	vsHOU	Sun 1:00pm
-TE	Travis Kelce KC - TE	vsBAL	Thu 8:20pm
-W/R/T	De'Von Achane Mia - RB	vsJAX	Sun 1:00pm
-K	Brandon Aubrey Dal - K	vsBAL	Thu 8:20pm
-DEF	Baltimore Bal - DEF	@KC	Thu 8:20pm
-BN	Kenneth Walker III Sea - RB	vsDEN	Sun 4:05pm
-BN	DK Metcalf Sea - WR	vsDEN	Sun 4:05pm
-`;
+// 2. Build a Yahoo-style roster from players that exist in the current data files, so the test
+//    doesn't break when the bundled rankings are refreshed and a hardcoded player drops out.
+const pick = (pos, i) => fpData[pos][i].name;
+const rosterLines = [
+    ['QB', pick('QB', 0), 'QB'],
+    ['RB', pick('RB', 0), 'RB'],
+    ['RB', pick('RB', 1), 'RB'],
+    ['WR', pick('WR', 0), 'WR'],
+    ['WR', pick('WR', 1), 'WR'],
+    ['TE', pick('TE', 0), 'TE'],
+    ['W/R/T', pick('RB', 2), 'RB'],
+    ['K', pick('K', 0), 'K'],
+    ['DEF', pick('DST', 0), 'DEF'],
+    ['BN', pick('RB', 3), 'RB'],
+    ['BN', pick('WR', 2), 'WR']
+];
+const yahooRosterText = 'Pos\tPlayer\tOpp\tStatus\n' +
+    rosterLines.map(([slot, name, pos]) => `${slot}\t${name} Tm - ${pos}\tvsOPP\tSun 1:00pm`).join('\n');
 
 const parsed = YahooService.parseRosterText(yahooRosterText);
 console.log(`\n[+] Parsed ${parsed.rosteredPlayers.length} players from Yahoo roster.`);

@@ -57,12 +57,12 @@ async function run() {
     assert.ok(travis, 'Owner 8 must own Travis Etienne');
 
     const scorings = [
-        { format: 'PPR', expectedRank: 25 },
-        { format: 'HALF', expectedRank: 27 },
-        { format: 'STD', expectedRank: 25 }
+        { format: 'PPR' },
+        { format: 'HALF' },
+        { format: 'STD' }
     ];
 
-    for (const { format, expectedRank } of scorings) {
+    for (const { format } of scorings) {
         const rosRoster = leagueData.rosteredPlayers.map(p => ({
             id: p.id,
             name: p.name,
@@ -75,6 +75,10 @@ async function run() {
         const rosIndex = PlayerMatcher.createIndex(rosRoster);
 
         const rosRb = JSON.parse(fs.readFileSync(`data/ROS-${format}-RB.json`, 'utf8'));
+        // Read Travis's rank from the data itself so the test survives ranking refreshes
+        const travisEntry = rosRb.find(p => p.id === '970693f0-0af4-4627-ac0c-bf519f7433ee');
+        assert.ok(travisEntry, `Travis Etienne must be in ROS-${format}-RB.json`);
+        const expectedRank = travisEntry.rank;
 
         for (const fpPlayer of rosRb) {
             const matched = rosIndex.find(fpPlayer.name, 'RB', fpPlayer.id);

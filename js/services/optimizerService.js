@@ -3,39 +3,146 @@
  */
 
 const OptimizerService = {
+    // Free agents must beat the best rostered option by this many rank spots before a PICKUP is suggested,
+    // so the app doesn't churn the waiver wire over coin-flip differences (especially K/DST streaming).
+    PICKUP_MARGIN: { QB: 2, RB: 2, WR: 2, TE: 2, K: 3, DST: 3, FLEX: 3 },
+
+    // Approximate number of startable players per position in a 12-team league, used to put
+    // positional ranks on a comparable scale when choosing which player to drop.
+    POSITION_DEPTH: { QB: 12, RB: 24, WR: 30, TE: 12, K: 12, DST: 12 },
+
+    // Flex slot eligibility. FLX follows the league-level flex toggle; the others are fixed by the slot type.
+    // Filled narrowest-first so wide slots (superflex) get whoever is left.
+    FLEX_SLOT_ORDER: ['REC', 'WRRB', 'FLX', 'SFLX'],
+
+    getFlexEligibility(slot, flexType) {
+        if (slot === 'FLX') return (flexType === 'WR') ? ['RB', 'WR'] : ['RB', 'WR', 'TE'];
+        if (slot === 'WRRB') return ['RB', 'WR'];
+        if (slot === 'REC') return ['WR', 'TE'];
+        if (slot === 'SFLX') return ['QB', 'RB', 'WR', 'TE'];
+        return [];
+    },
+
+    normalizeSlot(slot) {
+        if (slot === 'FLX' || slot === 'W/R/T' || slot === 'FLEX') return 'FLX';
+        if (slot === 'W/R' || slot === 'WRRB_FLEX') return 'WRRB';
+        if (slot === 'W/T' || slot === 'REC_FLEX') return 'REC';
+        if (slot === 'SUPER_FLEX' || slot === 'OP' || slot === 'Q/W/R/T') return 'SFLX';
+        return slot;
+    },
+
+    /**
+     * Estimates weekly fantasy points from FantasyPros projections, falling back to a rank-based curve.
+     */
+    estimatePoints(p) {
+        if (!p) return 0;
+        if (typeof p.pts === 'number' && p.pts > 0) return p.pts;
+        const pos = p.position || p.slot;
+        const r = (p.rank > 0) ? p.rank : 30;
+        if (pos === 'QB') return Math.max(8, +(26 - r * 0.45).toFixed(1));
+        if (pos === 'DST' || pos === 'K') return Math.max(3, +(12 - r * 0.28).toFixed(1));
+        return Math.max(3, +(22 - r * 0.35).toFixed(1));
+    },
+
+    /**
+     * Roster value used to pick drops: higher means more expendable. ROS rank dominates, weekly rank breaks ties.
+     */
+    dropScore(p) {
+        const depth = this.POSITION_DEPTH[p.position] || 24;
+        const hasRos = typeof p.rosRank === 'number' && p.rosRank > 0;
+        const ros = hasRos ? p.rosRank / depth : 5;
+        // A missing weekly rank (bye week, injury) is neutral for a player who still has ROS value
+        const weekly = (typeof p.rank === 'number' && p.rank > 0) ? p.rank / depth : ros;
+        return ros + weekly * 0.25;
+    },
+
     /**
      * Solves the optimal starting lineup based on league starting slots and FantasyPros ranks.
      * 
-     * @param {Array} rosteredPlayers - All players (filtered to team or with onRoster property)
+     * @param {Array} players - All ranked players (rostered players carry onRoster = team id, free agents onRoster = 0)
      * @param {Array} startingSlots - Array of required starting positions e.g. ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST']
      * @param {string|number} ownerId - Current team/owner ID
-     * @param {string} flexType - 'WRT' (RB/WR/TE) or 'WR' (RB/WR)
-     * @returns {Object} { optimalLineup, benchAlerts }
+     * @param {string} flexType - 'WRT' (RB/WR/TE) or 'WR' (RB/WR), applies to FLX slots
+     * @param {Object} options - { includeFreeAgents: false } disables PICKUP/DROP suggestions
+     *                           (used when other teams' rosters are unknown, e.g. Yahoo paste mode)
+     * @returns {Object} { optimalLineup, fullBench, benchAlerts, opinionatedMoves }
      */
-    solveLineup(players, startingSlots, ownerId, flexType = 'WRT') {
+    solveLineup(players, startingSlots, ownerId, flexType = 'WRT', options = {}) {
         if (!players || !Array.isArray(players) || !startingSlots || !Array.isArray(startingSlots)) {
             return { optimalLineup: [], fullBench: [], benchAlerts: [] };
         }
+        const includeFreeAgents = options.includeFreeAgents !== false;
 
         // 1. Separate user's team players and unrostered free agents
         const myTeamPlayers = players.filter(p => p.onRoster == ownerId);
-        const freeAgents = players.filter(p => p.onRoster === 0 && (p.rank > -1 || p.flxRank > -1));
+        const freeAgents = includeFreeAgents
+            ? players.filter(p => p.onRoster === 0 && (p.rank > -1 || p.flxRank > -1))
+            : [];
         const availableCandidates = [...myTeamPlayers.filter(p => p.rank > -1 || p.flxRank > -1), ...freeAgents];
 
         // Group required slots
         const fixedSlots = [];
-        const flexSlots = [];
-        for (const slot of startingSlots) {
-            if (slot === 'FLX' || slot === 'W/R/T' || slot === 'W/R' || slot === 'FLEX') {
-                flexSlots.push('FLX');
+        const flexSlotCounts = {};
+        for (const rawSlot of startingSlots) {
+            const slot = this.normalizeSlot(rawSlot);
+            if (this.FLEX_SLOT_ORDER.includes(slot)) {
+                flexSlotCounts[slot] = (flexSlotCounts[slot] || 0) + 1;
             } else if (slot !== 'BN' && slot !== 'IR') {
                 fixedSlots.push(slot);
             }
         }
 
-        const assignedPlayerNames = new Set();
+        const assignedPlayers = new Set();
         const optimalLineup = [];
         const pickupsAssigned = [];
+        const labels = (typeof CONFIG !== 'undefined' && CONFIG.SLOT_LABELS) ? CONFIG.SLOT_LABELS : {};
+
+        const pushStarter = (slot, chosen, displayRank) => {
+            assignedPlayers.add(chosen);
+            const isPickup = (chosen.onRoster === 0);
+            if (isPickup) pickupsAssigned.push(chosen);
+
+            let highlight = 'ok';
+            let badge = '';
+            let bgColor = 'transparent';
+            if (isPickup) {
+                highlight = 'pickup';
+                badge = 'PICKUP';
+                bgColor = '#ecfdf5';
+            } else if (!chosen.starter) {
+                highlight = 'start';
+                badge = 'START';
+                bgColor = '#e8f4fd';
+            }
+
+            optimalLineup.push({
+                slot,
+                slotLabel: labels[slot] || slot,
+                name: chosen.name,
+                position: chosen.position,
+                rank: displayRank,
+                starter: chosen.starter,
+                onRoster: chosen.onRoster,
+                highlight,
+                badge,
+                backgroundColor: bgColor
+            });
+        };
+
+        const pushEmpty = (slot) => {
+            optimalLineup.push({
+                slot,
+                slotLabel: labels[slot] || slot,
+                name: '(Empty Slot)',
+                position: slot,
+                rank: '-',
+                starter: false,
+                onRoster: ownerId,
+                highlight: 'none',
+                badge: '',
+                backgroundColor: 'transparent'
+            });
+        };
 
         // Order fixed slots logically: QB, RB, WR, TE, K, DST
         const positionPriority = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
@@ -49,191 +156,88 @@ const OptimizerService = {
             const count = slotCounts[pos] || 0;
             if (count === 0) continue;
 
+            const margin = this.PICKUP_MARGIN[pos] || 2;
+            const sortKey = p => p.rank + (p.onRoster === 0 ? margin : 0);
             const candidates = availableCandidates
-                .filter(p => p.position === pos && p.rank > -1 && !assignedPlayerNames.has(p.name))
-                .sort((a, b) => a.rank - b.rank);
+                .filter(p => p.position === pos && p.rank > -1 && !assignedPlayers.has(p))
+                .sort((a, b) => sortKey(a) - sortKey(b));
 
             for (let i = 0; i < count; i++) {
                 if (i < candidates.length) {
-                    const chosen = candidates[i];
-                    assignedPlayerNames.add(chosen.name);
-
-                    const isPickup = (chosen.onRoster === 0);
-                    if (isPickup) {
-                        pickupsAssigned.push(chosen);
-                    }
-
-                    let highlight = 'ok';
-                    let badge = '';
-                    let bgColor = 'transparent';
-
-                    if (isPickup) {
-                        highlight = 'pickup';
-                        badge = 'PICKUP';
-                        bgColor = '#ecfdf5';
-                    } else if (!chosen.starter) {
-                        highlight = 'start';
-                        badge = 'START';
-                        bgColor = '#e8f4fd';
-                    }
-
-                    optimalLineup.push({
-                        slot: pos,
-                        name: chosen.name,
-                        position: chosen.position,
-                        rank: chosen.rank,
-                        starter: chosen.starter,
-                        onRoster: chosen.onRoster,
-                        highlight: highlight,
-                        badge: badge,
-                        backgroundColor: bgColor
-                    });
+                    pushStarter(pos, candidates[i], candidates[i].rank);
                 } else {
-                    // Empty starting slot
-                    optimalLineup.push({
-                        slot: pos,
-                        name: '(Empty Slot)',
-                        position: pos,
-                        rank: '-',
-                        starter: false,
-                        onRoster: ownerId,
-                        highlight: 'none',
-                        badge: '',
-                        backgroundColor: 'transparent'
-                    });
+                    pushEmpty(pos);
                 }
             }
         }
 
-        // 2. Assign Flex slots
-        const flexEligiblePositions = (flexType === 'WR') ? ['RB', 'WR'] : ['RB', 'WR', 'TE'];
+        // 2. Assign Flex slots (narrowest eligibility first)
+        const flexRankOf = p => (p.flxRank > -1 ? p.flxRank : (p.rank + 50));
+        for (const slot of this.FLEX_SLOT_ORDER) {
+            const count = flexSlotCounts[slot] || 0;
+            if (count === 0) continue;
 
-        const flexCandidates = availableCandidates
-            .filter(p => flexEligiblePositions.includes(p.position) && !assignedPlayerNames.has(p.name) && (p.flxRank > -1 || p.rank > -1))
-            .sort((a, b) => {
-                const rankA = a.flxRank > -1 ? a.flxRank : (a.rank + 50);
-                const rankB = b.flxRank > -1 ? b.flxRank : (b.rank + 50);
-                return rankA - rankB;
-            });
+            const eligible = this.getFlexEligibility(slot, flexType);
+            let candidates = availableCandidates
+                .filter(p => eligible.includes(p.position) && !assignedPlayers.has(p) && (p.flxRank > -1 || p.rank > -1));
 
-        for (let i = 0; i < flexSlots.length; i++) {
-            if (i < flexCandidates.length) {
-                const chosen = flexCandidates[i];
-                assignedPlayerNames.add(chosen.name);
-
-                const isPickup = (chosen.onRoster === 0);
-                if (isPickup) {
-                    pickupsAssigned.push(chosen);
-                }
-
-                let highlight = 'ok';
-                let badge = '';
-                let bgColor = 'transparent';
-
-                if (isPickup) {
-                    highlight = 'pickup';
-                    badge = 'PICKUP';
-                    bgColor = '#ecfdf5';
-                } else if (!chosen.starter) {
-                    highlight = 'start';
-                    badge = 'START';
-                    bgColor = '#e8f4fd';
-                }
-
-                optimalLineup.push({
-                    slot: 'FLX',
-                    name: chosen.name,
-                    position: chosen.position,
-                    rank: chosen.flxRank > -1 ? chosen.flxRank : chosen.rank,
-                    starter: chosen.starter,
-                    onRoster: chosen.onRoster,
-                    highlight: highlight,
-                    badge: badge,
-                    backgroundColor: bgColor
-                });
+            if (slot === 'SFLX') {
+                // QBs and skill players have no shared ranking, so compare on projected points
+                const ptsKey = p => this.estimatePoints(p) - (p.onRoster === 0 ? 1 : 0);
+                candidates = candidates.sort((a, b) => ptsKey(b) - ptsKey(a));
             } else {
-                optimalLineup.push({
-                    slot: 'FLX',
-                    name: '(Empty Slot)',
-                    position: 'FLX',
-                    rank: '-',
-                    starter: false,
-                    onRoster: ownerId,
-                    highlight: 'none',
-                    badge: '',
-                    backgroundColor: 'transparent'
-                });
+                const sortKey = p => flexRankOf(p) + (p.onRoster === 0 ? this.PICKUP_MARGIN.FLEX : 0);
+                candidates = candidates.sort((a, b) => sortKey(a) - sortKey(b));
+            }
+
+            for (let i = 0; i < count; i++) {
+                if (i < candidates.length) {
+                    const chosen = candidates[i];
+                    const displayRank = (chosen.position !== 'QB' && chosen.flxRank > -1) ? chosen.flxRank : chosen.rank;
+                    pushStarter(slot, chosen, displayRank);
+                } else {
+                    pushEmpty(slot);
+                }
             }
         }
 
         // 3. Build Full Bench for user's team
         const fullBench = [];
-        const displacedStarters = myTeamPlayers.filter(p => p.starter && !assignedPlayerNames.has(p.name));
-        const normalBench = myTeamPlayers.filter(p => !p.starter && !assignedPlayerNames.has(p.name));
+        const notStarting = myTeamPlayers.filter(p => !assignedPlayers.has(p));
 
-        // Sort displaced starters worst-ranked first to pair worst starters with drops
-        displacedStarters.sort((a, b) => {
-            const rankA = typeof a.rank === 'number' && a.rank > -1 ? a.rank : 999;
-            const rankB = typeof b.rank === 'number' && b.rank > -1 ? b.rank : 999;
-            return rankB - rankA;
+        // Pair each pickup with the most expendable roster player. K/DST pickups are paired first and
+        // prefer dropping a redundant player at the same position (e.g. swap one DST for another).
+        const dropFor = new Map(); // roster player -> pickup
+        const pickupOrder = [...pickupsAssigned].sort((a, b) => {
+            const aSpecial = (a.position === 'K' || a.position === 'DST') ? 0 : 1;
+            const bSpecial = (b.position === 'K' || b.position === 'DST') ? 0 : 1;
+            return aSpecial - bSpecial;
         });
-
-        // Track available pickup tokens to pair 1-to-1 with drops
-        const dropTokens = [...pickupsAssigned];
-
-        // Starters displaced by better bench players or free agent pickups
-        for (const p of displacedStarters) {
-            // Check if there was a free agent pickup at this position (or flex)
-            const tokenIndex = dropTokens.findIndex(pk => 
-                pk.position === p.position || 
-                (['RB', 'WR', 'TE'].includes(p.position) && ['RB', 'WR', 'TE'].includes(pk.position))
-            );
-
-            let isDrop = false;
-            let targetPickup = null;
-            if (tokenIndex !== -1) {
-                isDrop = true;
-                const pk = dropTokens.splice(tokenIndex, 1)[0];
-                targetPickup = pk.name;
-                const optMatch = optimalLineup.find(o => o.name === pk.name);
-                if (optMatch) {
-                    optMatch.targetDrop = p.name;
-                }
-            }
-
-            fullBench.push({
-                slot: 'BN',
-                name: p.name,
-                position: p.position,
-                rank: p.rank > -1 ? p.rank : (p.flxRank > -1 ? p.flxRank : '-'),
-                flxRank: p.flxRank,
-                starter: true,
-                highlight: isDrop ? 'drop' : 'bench',
-                badge: isDrop ? 'DROP' : 'BENCH',
-                targetPickup: targetPickup,
-                backgroundColor: isDrop ? '#fef2f2' : '#fde8e8'
-            });
+        for (const pk of pickupOrder) {
+            const remaining = notStarting.filter(p => !dropFor.has(p));
+            if (remaining.length === 0) break;
+            const samePos = remaining.filter(p => p.position === pk.position);
+            const pool = ((pk.position === 'K' || pk.position === 'DST') && samePos.length > 0) ? samePos : remaining;
+            const drop = pool.reduce((worst, p) => (this.dropScore(p) > this.dropScore(worst) ? p : worst), pool[0]);
+            dropFor.set(drop, pk);
+            const optMatch = optimalLineup.find(o => o.name === pk.name && o.highlight === 'pickup');
+            if (optMatch) optMatch.targetDrop = drop.name;
         }
 
-        // Normal bench players
-        // Sort normal bench worst-ranked first to pair any remaining drop tokens with lowest-value bench players
-        normalBench.sort((a, b) => {
-            const rankA = typeof a.rank === 'number' && a.rank > -1 ? a.rank : (a.flxRank > -1 ? a.flxRank : 999);
-            const rankB = typeof b.rank === 'number' && b.rank > -1 ? b.rank : (b.flxRank > -1 ? b.flxRank : 999);
-            return rankB - rankA;
-        });
-
-        for (const p of normalBench) {
-            let isDrop = false;
-            let targetPickup = null;
-            if (dropTokens.length > 0) {
-                isDrop = true;
-                const pk = dropTokens.shift();
-                targetPickup = pk.name;
-                const optMatch = optimalLineup.find(o => o.name === pk.name);
-                if (optMatch && !optMatch.targetDrop) {
-                    optMatch.targetDrop = p.name;
-                }
+        for (const p of notStarting) {
+            const pk = dropFor.get(p);
+            const isDrop = !!pk;
+            let highlight = 'none';
+            let badge = '';
+            let bgColor = 'transparent';
+            if (isDrop) {
+                highlight = 'drop';
+                badge = 'DROP';
+                bgColor = '#fef2f2';
+            } else if (p.starter) {
+                highlight = 'bench';
+                badge = 'BENCH';
+                bgColor = '#fde8e8';
             }
 
             fullBench.push({
@@ -242,11 +246,11 @@ const OptimizerService = {
                 position: p.position,
                 rank: p.rank > -1 ? p.rank : (p.flxRank > -1 ? p.flxRank : '-'),
                 flxRank: p.flxRank,
-                starter: false,
-                highlight: isDrop ? 'drop' : 'none',
-                badge: isDrop ? 'DROP' : '',
-                targetPickup: targetPickup,
-                backgroundColor: isDrop ? '#fef2f2' : 'transparent'
+                starter: !!p.starter,
+                highlight,
+                badge,
+                targetPickup: isDrop ? pk.name : null,
+                backgroundColor: bgColor
             });
         }
 
@@ -341,15 +345,7 @@ const OptimizerService = {
         const dRank = drop ? ((typeof drop.rank === 'number' && drop.rank > 0) ? drop.rank : 99) : 99;
         const rankDelta = dRank - pRank;
 
-        const getEstPts = (p) => {
-            if (!p) return 0;
-            if (typeof p.pts === 'number' && p.pts > 0) return p.pts;
-            const pos = p.position || p.slot;
-            const r = (p.rank > 0) ? p.rank : 30;
-            if (pos === 'QB') return Math.max(8, +(26 - r * 0.45).toFixed(1));
-            if (pos === 'DST' || pos === 'K') return Math.max(3, +(12 - r * 0.28).toFixed(1));
-            return Math.max(3, +(22 - r * 0.35).toFixed(1));
-        };
+        const getEstPts = (p) => this.estimatePoints(p);
 
         const pPts = getEstPts(pickup);
         const dPts = drop ? getEstPts(drop) : 0;

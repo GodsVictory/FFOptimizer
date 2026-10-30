@@ -10,31 +10,19 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="manifest" href="site.webmanifest">
 
-    <!-- Tailwind CSS (Play CDN for standalone zero-build deployment) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0fdf4',
-                            500: '#10b981',
-                            600: '#059669',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind CSS (prebuilt from tailwind.config.js via `npm run build:css`) -->
+    <link rel="stylesheet" href="css/tailwind.css">
 
     <!-- Custom CSS (Table highlights & SVG animations) -->
     <link rel="stylesheet" href="css/app.css">
 
-    <!-- Third-Party Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+    <!-- Third-Party Libraries (pinned versions with Subresource Integrity) -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"
+            integrity="sha384-YVYXhPGIH/Gmcr0W5Rin4PcpcsG1a4pcdUUod1CnbDEJut7XiUaJtSlNKeRLJBPk" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.21.0/dist/axios.min.js"
+            integrity="sha384-p5EwRuz37ylAY9QrjGGIs9ngKVaIwppUFSourks9EIRp1CzoIDWoQkXrHxaAUhEB" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.2.0/dist/fuse.min.js"
+            integrity="sha384-fjX7DeaZ/XFhVUVbuJ4tJCCRWoC6LtyhHqvsNRsJBcfs1VksovPjnUUGM3+Ii9st" crossorigin="anonymous"></script>
 </head>
 
 <body class="min-h-full text-slate-800 antialiased font-sans selection:bg-slate-900 selection:text-white">
@@ -259,6 +247,14 @@
                 <!-- Error Notification -->
                 <div v-if="errorMessage" class="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-medium text-rose-800">
                     {{ errorMessage }}
+                </div>
+
+                <!-- Data Freshness / Import Notices -->
+                <div v-if="weekNotice" class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-medium text-amber-800">
+                    {{ weekNotice }}
+                </div>
+                <div v-if="leagueNotice" class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-medium text-amber-800">
+                    {{ leagueNotice }}
                 </div>
 
                 <!-- Recent Leagues History Chips -->
@@ -499,7 +495,7 @@
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block shadow-xs"></span>
                                     <span>My Roster</span>
                                 </button>
-                                <button type="button"
+                                <button type="button" v-if="freeAgentsKnown"
                                         @click="toggleMatrixFilter('wire')"
                                         :class="matrixFilters.wire ? 'opacity-100' : 'opacity-40 line-through'"
                                         class="flex items-center gap-1.5 transition text-xs font-medium text-slate-700 hover:opacity-80 cursor-pointer"
@@ -932,7 +928,7 @@
                                         @click="selectPlayerByName(slotItem.name)"
                                         :class="{'pickup-rec': slotItem.highlight === 'pickup', 'start-rec': slotItem.highlight === 'start', 'current-starter': slotItem.highlight === 'ok', 'clickable-player': slotItem.name && slotItem.name !== '(Empty Slot)'}"
                                         :title="slotItem.name && slotItem.name !== '(Empty Slot)' ? 'Click to highlight ' + slotItem.name + ' on Decision Matrix' : ''">
-                                        <td class="pos-cell">{{ slotItem.slot }}</td>
+                                        <td class="pos-cell">{{ slotItem.slotLabel || slotItem.slot }}</td>
                                         <td class="name-cell" :title="slotItem.name">
                                             <div class="flex items-center justify-between gap-1">
                                                 <span class="truncate">{{ slotItem.name }}</span>

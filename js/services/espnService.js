@@ -6,9 +6,14 @@ const EspnService = {
     /**
      * Loads ESPN league settings, rosters, and teams concurrently.
      */
-    async loadLeagueData(leagueId, season = new Date().getFullYear()) {
+    async loadLeagueData(leagueId, season = null) {
         if (!leagueId) {
             throw new Error('Please enter an ESPN League ID');
+        }
+        if (!season) {
+            // The NFL season spills into January/February; those games belong to the prior year's season
+            const now = new Date();
+            season = now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear();
         }
 
         const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mSettings&view=mRoster&view=mTeam`;
@@ -28,7 +33,7 @@ const EspnService = {
 
         const slotMap = (typeof CONFIG !== 'undefined' && CONFIG.ESPN_SLOT_MAP) 
             ? CONFIG.ESPN_SLOT_MAP 
-            : { 0: 'QB', 2: 'RB', 3: 'FLX', 4: 'WR', 6: 'TE', 16: 'DST', 17: 'K' };
+            : { 0: 'QB', 2: 'RB', 3: 'WRRB', 4: 'WR', 5: 'REC', 6: 'TE', 7: 'SFLX', 16: 'DST', 17: 'K', 20: 'BN', 21: 'IR', 23: 'FLX' };
 
         const posMap = (typeof CONFIG !== 'undefined' && CONFIG.ESPN_POS_MAP) 
             ? CONFIG.ESPN_POS_MAP 
@@ -80,8 +85,8 @@ const EspnService = {
                 if (!position) continue; // skip unrecognized positions
 
                 const fullName = (playerObj.fullName || '').replace(/\./g, '');
-                // In ESPN, slot ID < 20 indicates an active starting slot (not bench/IR)
-                const isStarter = entry.lineupSlotId < 20;
+                // Bench (20) and IR (21) are the only non-starting slots; FLEX is slot 23
+                const isStarter = entry.lineupSlotId !== 20 && entry.lineupSlotId !== 21;
 
                 rosteredPlayers.push({
                     id: playerObj.id ? String(playerObj.id) : false,

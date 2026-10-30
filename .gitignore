@@ -5,7 +5,3 @@ Thumbs.db
 node_modules/
 .vscode/
 
-# FantasyPros generated rank data (fetched live & cached in browser storage)
-data/*-*.json
-data/ROS-*.json
-data/lastUpdatedAt.json

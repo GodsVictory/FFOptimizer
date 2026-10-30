@@ -20,17 +20,28 @@ const CONFIG = {
     POSITIONS: ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DST'],
     CORE_POSITIONS: ['QB', 'RB', 'WR', 'TE', 'K', 'DST'],
     
+    // Flex slot types beyond the standard FLX slot (whose eligibility follows the RB/WR/TE vs RB/WR toggle)
+    SLOT_LABELS: {
+        FLX: 'FLX',
+        WRRB: 'W/R',
+        REC: 'W/T',
+        SFLX: 'SFLX'
+    },
+
     // ESPN Roster Slot IDs to Position
     ESPN_SLOT_MAP: {
         0: 'QB',
         2: 'RB',
-        3: 'FLX', // RB/WR/TE Flex
+        3: 'WRRB', // RB/WR Flex
         4: 'WR',
+        5: 'REC',  // WR/TE Flex
         6: 'TE',
+        7: 'SFLX', // OP (Superflex)
         16: 'DST',
         17: 'K',
         20: 'BN',
-        21: 'IR'
+        21: 'IR',
+        23: 'FLX'  // RB/WR/TE Flex
     },
 
     // ESPN Player Default Position ID to Position
@@ -50,6 +61,9 @@ const CONFIG = {
         'WR': 'WR',
         'TE': 'TE',
         'FLEX': 'FLX',
+        'WRRB_FLEX': 'WRRB',
+        'REC_FLEX': 'REC',
+        'SUPER_FLEX': 'SFLX',
         'K': 'K',
         'DEF': 'DST',
         'DST': 'DST'
@@ -62,7 +76,9 @@ const CONFIG = {
         'WR': 'WR',
         'TE': 'TE',
         'W/R/T': 'FLX',
-        'W/R': 'FLX',
+        'W/R': 'WRRB',
+        'W/T': 'REC',
+        'Q/W/R/T': 'SFLX',
         'FLEX': 'FLX',
         'K': 'K',
         'DEF': 'DST',

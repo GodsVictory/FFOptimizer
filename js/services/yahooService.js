@@ -30,9 +30,10 @@ const YahooService = {
         const rosteredPlayers = [];
         const posMap = (typeof CONFIG !== 'undefined' && CONFIG.YAHOO_POS_MAP) 
             ? CONFIG.YAHOO_POS_MAP 
-            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'W/R': 'FLX', 'K': 'K', 'DEF': 'DST' };
+            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'W/R': 'WRRB', 'W/T': 'REC', 'Q/W/R/T': 'SFLX', 'K': 'K', 'DEF': 'DST' };
 
-        const validSlots = new Set(['QB', 'RB', 'WR', 'TE', 'W/R/T', 'W/R', 'FLEX', 'K', 'DEF', 'DST', 'BN', 'IR']);
+        const validSlots = new Set(['QB', 'RB', 'WR', 'TE', 'W/R/T', 'W/R', 'W/T', 'Q/W/R/T', 'FLEX', 'K', 'DEF', 'DST', 'BN', 'IR']);
+        const flexSlots = new Set(['W/R/T', 'W/R', 'W/T', 'Q/W/R/T', 'FLEX']);
 
         for (let line of lines) {
             line = line.trim();
@@ -53,7 +54,7 @@ const YahooService = {
                 rest = tokens.slice(1).join(' ');
             } else {
                 // Try matching start of line
-                const matchSlot = line.match(/^(QB|RB|WR|TE|W\/R\/T|W\/R|FLEX|K|DEF|DST|BN|IR)\b\s*(.*)$/i);
+                const matchSlot = line.match(/^(Q\/W\/R\/T|W\/R\/T|W\/R|W\/T|QB|RB|WR|TE|FLEX|K|DEF|DST|BN|IR)\b\s*(.*)$/i);
                 if (matchSlot) {
                     slot = matchSlot[1].toUpperCase();
                     rest = matchSlot[2];
@@ -93,7 +94,7 @@ const YahooService = {
             if (!playerPos) {
                 if (slot === 'DEF' || slot === 'DST') {
                     playerPos = 'DST';
-                } else if (slot !== 'BN' && slot !== 'IR' && slot !== 'W/R/T' && slot !== 'W/R' && slot !== 'FLEX') {
+                } else if (slot !== 'BN' && slot !== 'IR' && !flexSlots.has(slot)) {
                     playerPos = posMap[slot] || slot;
                 }
             } else {
@@ -140,7 +141,9 @@ const YahooService = {
             startingSlots: finalStartingSlots,
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
             rosteredPlayers,
-            flex: detectedFlex
+            flex: detectedFlex,
+            // Only the user's own roster is known, so unrostered ranked players may be owned by other teams
+            freeAgentsKnown: false
         };
     },
 
@@ -162,7 +165,7 @@ const YahooService = {
         const rows = doc.querySelectorAll('tr');
         const posMap = (typeof CONFIG !== 'undefined' && CONFIG.YAHOO_POS_MAP) 
             ? CONFIG.YAHOO_POS_MAP 
-            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'W/R': 'FLX', 'K': 'K', 'DEF': 'DST' };
+            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'W/R': 'WRRB', 'W/T': 'REC', 'Q/W/R/T': 'SFLX', 'K': 'K', 'DEF': 'DST' };
 
         const startingSlots = [];
         const rosteredPlayers = [];
@@ -189,7 +192,7 @@ const YahooService = {
 
                 if (!playerPos) {
                     if (slot === 'DEF' || slot === 'DST') playerPos = 'DST';
-                    else if (slot !== 'BN' && slot !== 'IR' && slot !== 'W/R/T') playerPos = posMap[slot] || slot;
+                    else if (slot !== 'BN' && slot !== 'IR' && !['W/R/T', 'W/R', 'W/T', 'Q/W/R/T', 'FLEX'].includes(slot)) playerPos = posMap[slot] || slot;
                 }
 
                 const isStarter = (slot !== 'BN' && slot !== 'IR');
@@ -224,7 +227,9 @@ const YahooService = {
             startingSlots: startingSlots.length > 0 ? startingSlots : ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLX', 'K', 'DST'],
             owners: [{ id: 1, owner: 'My Yahoo Team' }],
             rosteredPlayers,
-            flex: detectedFlex
+            flex: detectedFlex,
+            // Only the user's own roster is known, so unrostered ranked players may be owned by other teams
+            freeAgentsKnown: false
         };
     },
 
@@ -272,7 +277,7 @@ const YahooService = {
     _parseApiResponse(settingsJson, teamsJson) {
         const posMap = (typeof CONFIG !== 'undefined' && CONFIG.YAHOO_POS_MAP) 
             ? CONFIG.YAHOO_POS_MAP 
-            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'K': 'K', 'DEF': 'DST' };
+            : { 'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'W/R/T': 'FLX', 'W/R': 'WRRB', 'W/T': 'REC', 'Q/W/R/T': 'SFLX', 'K': 'K', 'DEF': 'DST' };
 
         const startingSlots = [];
         const owners = [];

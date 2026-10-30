@@ -10,7 +10,23 @@ const FantasyProsService = {
     _metadata: null,
     _nflState: null,
     _lastWeek: null,
+    _requestedWeek: null,
     _cacheTimestamp: null,
+    _cacheTimes: {},      // scoring -> time the in-memory weekly entry was stored
+    _rosCacheTimes: {},   // scoring -> time the in-memory ROS entry was stored
+    _usingFallback: false, // true when rankings came from bundled data/ files instead of live FantasyPros
+    _fallbackDate: null,
+
+    CACHE_TTL: 2 * 60 * 60 * 1000,   // 2 hours for complete live data
+    PARTIAL_TTL: 5 * 60 * 1000,      // retry soon when any position failed or fell back to bundled data
+
+    _isFresh(times, scoring, data) {
+        if (!data) return false;
+        const t = times[scoring];
+        if (!t) return false;
+        const ttl = (data.__partial ? this.PARTIAL_TTL : this.CACHE_TTL);
+        return Date.now() - t < ttl;
+    },
 
     /**
      * Executes a JSONP request that bypasses browser CORS restrictions.
@@ -150,12 +166,12 @@ const FantasyProsService = {
      * Checks in-memory cache, then browser localStorage (2hr TTL), then fetches live from FantasyPros via JSONP.
      */
     async fetchRankings(scoring = 'STD', forceRefresh = false) {
-        if (!forceRefresh && this._cache[scoring]) {
+        if (!forceRefresh && this._isFresh(this._cacheTimes, scoring, this._cache[scoring])) {
             return this._cache[scoring];
         }
 
         const storageKey = 'ff_rankings_' + scoring;
-        const TTL = 2 * 60 * 60 * 1000; // 2 hours
+        const TTL = this.CACHE_TTL;
 
         // Check browser localStorage cache
         if (!forceRefresh) {
@@ -166,7 +182,10 @@ const FantasyProsService = {
                         const cached = JSON.parse(raw);
                         if (cached && cached.timestamp && (Date.now() - cached.timestamp < TTL) && cached.rankingsByPos) {
                             this._cache[scoring] = cached.rankingsByPos;
+                            this._cacheTimes[scoring] = cached.timestamp;
                             if (cached.week) this._lastWeek = cached.week;
+                            this._requestedWeek = cached.requestedWeek || cached.week || null;
+                            this._usingFallback = false;
                             this._cacheTimestamp = cached.timestamp;
                             this._metadata = null;
                             return cached.rankingsByPos;
@@ -186,6 +205,7 @@ const FantasyProsService = {
         try {
             const { week, year } = await this.getNflState();
             let targetWeek = week;
+            this._requestedWeek = week;
 
             // Probe QB first to verify if targetWeek rankings are published
             const probeUrl = `https://partners.fantasypros.com/api/v1/consensus-rankings.php?sport=NFL&year=${year}&week=${targetWeek}&scoring=${scoring}&export=json&position=QB`;
@@ -206,30 +226,41 @@ const FantasyProsService = {
                     }))
                     .catch(err => {
                         console.warn(`JSONP failed for ${pos}, attempting local fallback:`, err);
-                        return this._fetchLocalWeekly(scoring, pos);
+                        return this._fetchLocalWeekly(scoring, pos).then(r => ({ ...r, fallback: true }));
                     });
             });
 
             const results = await Promise.all(fetchPromises);
             const rankingsByPos = {};
+            let partial = false;
             for (const item of results) {
                 rankingsByPos[item.pos] = item.players;
+                if (item.fallback || !item.players || item.players.length === 0) partial = true;
+            }
+            if (partial) {
+                // Non-enumerable so it never ends up in JSON / Object.entries iteration
+                Object.defineProperty(rankingsByPos, '__partial', { value: true, enumerable: false });
             }
 
             this._cache[scoring] = rankingsByPos;
+            this._cacheTimes[scoring] = Date.now();
             this._cacheTimestamp = Date.now();
+            this._usingFallback = false;
             this._metadata = null;
 
-            // Store in browser localStorage
-            try {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem(storageKey, JSON.stringify({
-                        timestamp: this._cacheTimestamp,
-                        week: targetWeek,
-                        rankingsByPos
-                    }));
-                }
-            } catch (e) {}
+            // Store in browser localStorage, but only complete live results so failures aren't pinned for 2 hours
+            if (!partial) {
+                try {
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem(storageKey, JSON.stringify({
+                            timestamp: this._cacheTimestamp,
+                            week: targetWeek,
+                            requestedWeek: week,
+                            rankingsByPos
+                        }));
+                    }
+                } catch (e) {}
+            }
 
             return rankingsByPos;
         } catch (err) {
@@ -243,12 +274,12 @@ const FantasyProsService = {
      * Checks in-memory cache, then browser localStorage (2hr TTL), then fetches live from FantasyPros via JSONP.
      */
     async fetchRosRankings(scoring = 'STD', forceRefresh = false) {
-        if (!forceRefresh && this._rosCache[scoring]) {
+        if (!forceRefresh && this._isFresh(this._rosCacheTimes, scoring, this._rosCache[scoring])) {
             return this._rosCache[scoring];
         }
 
         const storageKey = 'ff_ros_rankings_' + scoring;
-        const TTL = 2 * 60 * 60 * 1000; // 2 hours
+        const TTL = this.CACHE_TTL;
 
         // Check browser localStorage cache
         if (!forceRefresh) {
@@ -259,6 +290,7 @@ const FantasyProsService = {
                         const cached = JSON.parse(raw);
                         if (cached && cached.timestamp && (Date.now() - cached.timestamp < TTL) && cached.rosByPos) {
                             this._rosCache[scoring] = cached.rosByPos;
+                            this._rosCacheTimes[scoring] = cached.timestamp;
                             return cached.rosByPos;
                         }
                     }
@@ -286,28 +318,35 @@ const FantasyProsService = {
                     }))
                     .catch(err => {
                         console.warn(`JSONP ROS failed for ${pos}, attempting local fallback:`, err);
-                        return this._fetchLocalRos(scoring, pos);
+                        return this._fetchLocalRos(scoring, pos).then(r => ({ ...r, fallback: true }));
                     });
             });
 
             const results = await Promise.all(fetchPromises);
             const rosByPos = {};
+            let partial = false;
             for (const item of results) {
                 rosByPos[item.pos] = item.players;
+                if (item.fallback || !item.players || item.players.length === 0) partial = true;
+            }
+            if (partial) {
+                Object.defineProperty(rosByPos, '__partial', { value: true, enumerable: false });
             }
 
             this._rosCache[scoring] = rosByPos;
+            this._rosCacheTimes[scoring] = Date.now();
             this._metadata = null;
 
-            // Store in browser localStorage
-            try {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem(storageKey, JSON.stringify({
-                        timestamp: Date.now(),
-                        rosByPos
-                    }));
-                }
-            } catch (e) {}
+            if (!partial) {
+                try {
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem(storageKey, JSON.stringify({
+                            timestamp: Date.now(),
+                            rosByPos
+                        }));
+                    }
+                } catch (e) {}
+            }
 
             return rosByPos;
         } catch (err) {
@@ -334,7 +373,30 @@ const FantasyProsService = {
         for (const item of results) {
             rankingsByPos[item.pos] = item.players;
         }
+        if (results.every(r => !r.players || r.players.length === 0)) {
+            throw new Error('Could not load rankings from FantasyPros, and no offline rankings are available. Please try again shortly.');
+        }
+
+        Object.defineProperty(rankingsByPos, '__partial', { value: true, enumerable: false });
         this._cache[scoring] = rankingsByPos;
+        this._cacheTimes[scoring] = Date.now();
+        this._usingFallback = true;
+        this._metadata = null;
+
+        // Report the week the bundled files were generated for, not the live NFL week
+        try {
+            if (typeof axios !== 'undefined') {
+                const res = await axios.get('data/lastUpdatedAt.json');
+                if (res.data) {
+                    if (res.data.week) {
+                        this._lastWeek = parseInt(res.data.week, 10) || this._lastWeek;
+                        this._requestedWeek = this._lastWeek;
+                    }
+                    this._fallbackDate = res.data.date || null;
+                }
+            }
+        } catch (e) {}
+
         return rankingsByPos;
     },
 
@@ -355,7 +417,9 @@ const FantasyProsService = {
         for (const item of results) {
             rosByPos[item.pos] = item.players;
         }
+        Object.defineProperty(rosByPos, '__partial', { value: true, enumerable: false });
         this._rosCache[scoring] = rosByPos;
+        this._rosCacheTimes[scoring] = Date.now();
         return rosByPos;
     },
 
@@ -416,10 +480,16 @@ const FantasyProsService = {
             minutesAgo = Math.max(0, Math.floor((Date.now() - timestamp) / 1000 / 60));
         }
 
+        const currentWeek = this._nflState ? this._nflState.week : null;
         this._metadata = {
             week: String(week || '1'),
             year: year || String(new Date().getFullYear()),
-            minutesAgo: isNaN(minutesAgo) ? 0 : minutesAgo
+            minutesAgo: isNaN(minutesAgo) ? 0 : minutesAgo,
+            // Rankings for the current week weren't published yet, so the previous week's are shown
+            isPreviousWeek: !!(week && currentWeek && parseInt(week, 10) < currentWeek),
+            currentWeek: currentWeek ? String(currentWeek) : '',
+            isFallback: this._usingFallback,
+            fallbackDate: this._fallbackDate
         };
         return this._metadata;
     },
@@ -433,7 +503,12 @@ const FantasyProsService = {
         this._metadata = null;
         this._nflState = null;
         this._lastWeek = null;
+        this._requestedWeek = null;
         this._cacheTimestamp = null;
+        this._cacheTimes = {};
+        this._rosCacheTimes = {};
+        this._usingFallback = false;
+        this._fallbackDate = null;
         try {
             if (typeof localStorage !== 'undefined') {
                 for (const s of ['STD', 'HALF', 'PPR']) {

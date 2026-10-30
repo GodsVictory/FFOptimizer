@@ -116,39 +116,40 @@ async function run() {
         console.log(`    - ${p.position.padEnd(5)} | ${p.name.padEnd(25)} | #${String(p.rank).padEnd(4)} | Highlight: ${p.highlight.padEnd(8)} | Badge: ${p.badge || '-'}`);
     });
 
-    // 5. Assertions for user's specific test cases
-    // Case 1: Pickups and Drops matching
+    // 5. Invariant checks (rosters change week to week, so avoid asserting specific player names)
+    const myRoster = leagueData.rosteredPlayers.filter(p => String(p.onRoster) === '8');
     const pickups = optimalLineup.filter(p => p.highlight === 'pickup');
     const drops = fullBench.filter(p => p.highlight === 'drop');
-    assert.ok(pickups.length > 0, 'Should have pickup recommendations');
-    assert.ok(drops.length > 0, 'Should have drop recommendations');
     assert.ok(drops.length <= pickups.length, 'Drops should not exceed pickups');
-    console.log(`\n[PASS] Verified ${pickups.length} pickups and ${drops.length} matching drops`);
-
-    // Verify Eagles DST if recommended as pickup
-    const eagles = optimalLineup.find(p => p.name === 'Philadelphia Eagles');
-    if (eagles) {
-        assert.strictEqual(eagles.slot, 'DST');
-        assert.strictEqual(eagles.highlight, 'pickup');
-        assert.strictEqual(eagles.badge, 'PICKUP');
-        console.log('[PASS] Philadelphia Eagles DST correctly recommended as PICKUP');
+    for (const pk of pickups) {
+        assert.strictEqual(pk.onRoster, 0, `Pickup ${pk.name} must be a free agent`);
+        assert.strictEqual(pk.badge, 'PICKUP');
+        assert.ok(pk.targetDrop, `Pickup ${pk.name} should be paired with a drop`);
+        assert.ok(drops.some(d => d.name === pk.targetDrop), `Paired drop ${pk.targetDrop} must be on the bench list`);
     }
-
-    // Case 2: Displaced starters have drop badge
-    for (const dropPlayer of drops) {
-        assert.strictEqual(dropPlayer.highlight, 'drop');
-        assert.strictEqual(dropPlayer.badge, 'DROP');
+    for (const d of drops) {
+        assert.strictEqual(d.badge, 'DROP');
+        assert.ok(pickups.some(pk => pk.name === d.targetPickup), `Drop ${d.name} must be paired with a pickup`);
     }
-    console.log(`[PASS] All ${drops.length} drops correctly marked with DROP badge: ${drops.map(d => d.name).join(', ')}`);
+    console.log(`\n[PASS] ${pickups.length} pickups are free agents, each paired 1:1 with a drop`);
 
-    // Case 3: Owner 8 bench players without drop recommendations have highlight 'none'
-    const coreBenchPlayers = ['Patrick Mahomes', 'Aaron Jones', 'Jakobi Meyers'];
-    for (const bName of coreBenchPlayers) {
-        const found = fullBench.find(p => p.name === bName);
-        assert.ok(found, `Expected bench player ${bName} must be present in fullBench`);
-        assert.strictEqual(found.highlight, 'none');
-        console.log(`[PASS] Bench player ${bName} (#${found.rank}) present in fullBench`);
+    // Every rostered player appears exactly once, either in the lineup or on the bench
+    for (const p of myRoster) {
+        const inLineup = optimalLineup.filter(o => o.name === p.name && o.onRoster !== 0).length;
+        const onBench = fullBench.filter(b => b.name === p.name).length;
+        assert.strictEqual(inLineup + onBench, 1, `${p.name} must appear exactly once in lineup or bench`);
     }
+    console.log(`[PASS] All ${myRoster.length} rostered players accounted for exactly once`);
+
+    // K/DST pickups swap out a same-position player when one is available
+    for (const pk of pickups.filter(p => p.position === 'K' || p.position === 'DST')) {
+        const samePosOnBench = myRoster.some(p => p.position === pk.position && fullBench.some(b => b.name === p.name));
+        if (samePosOnBench) {
+            const drop = fullBench.find(b => b.name === pk.targetDrop);
+            assert.strictEqual(drop.position, pk.position, `${pk.position} pickup ${pk.name} should drop a ${pk.position}`);
+        }
+    }
+    console.log('[PASS] K/DST pickups are paired with same-position drops');
 
     // Case 4: Verify suggested pickups are highlighted in Weekly and ROS rankings
     const FantasyProsService = require('../js/services/fantasyProsService.js');
@@ -188,23 +189,22 @@ async function run() {
     const weeklyCols = OptimizerService.buildPositionColumns(allRankedPlayers, '8', 'WRT', pickupNames);
     const rosCols = OptimizerService.buildPositionColumns(allRosRankedPlayers, '8', 'WRT', pickupNames);
 
-    // Verify Eagles DST in weekly and ROS rankings
-    const eaglesWeekly = weeklyCols['DST'].players.find(p => p.name === 'Philadelphia Eagles');
-    assert.ok(eaglesWeekly, 'Eagles DST must be in weekly DST column');
-    assert.strictEqual(eaglesWeekly.isPickup, true, 'Eagles DST must be flagged isPickup in Weekly');
-    console.log('[PASS] Weekly DST rankings correctly highlights Philadelphia Eagles DST as isPickup: true');
-
-    const eaglesRos = rosCols['DST'].players.find(p => p.name === 'Philadelphia Eagles');
-    assert.ok(eaglesRos, 'Eagles DST must be in ROS DST column');
-    assert.strictEqual(eaglesRos.isPickup, true, 'Eagles DST must be flagged isPickup in ROS');
-    console.log('[PASS] ROS DST rankings correctly highlights Philadelphia Eagles DST as isPickup: true');
-
-    // Verify rostered player (e.g. Bijan Robinson) is NOT marked isPickup
-    const bijanWeekly = weeklyCols['RB'].players.find(p => p.name.includes('Bijan Robinson'));
-    assert.ok(bijanWeekly, 'Bijan Robinson must be in weekly RB column');
-    assert.strictEqual(bijanWeekly.isPickup, false, 'Bijan Robinson must have isPickup: false');
-    assert.strictEqual(String(bijanWeekly.onRoster), '8', 'Bijan Robinson must have onRoster: 8');
-    console.log('[PASS] Rostered player Bijan Robinson has onRoster: 8 and isPickup: false');
+    // Suggested pickups are flagged in the ranking columns; rostered players never are
+    for (const [pos, col] of Object.entries(weeklyCols)) {
+        for (const p of col.players) {
+            const isPick = pickupNames.has(PlayerMatcher.normalizeName(p.name));
+            assert.strictEqual(p.isPickup, isPick, `${pos} column: ${p.name} isPickup should be ${isPick}`);
+            if (String(p.onRoster) === '8') {
+                assert.strictEqual(p.isPickup, false, `Rostered player ${p.name} must not be flagged as a pickup`);
+            }
+        }
+    }
+    for (const col of Object.values(rosCols)) {
+        for (const p of col.players) {
+            assert.strictEqual(p.isPickup, pickupNames.has(PlayerMatcher.normalizeName(p.name)));
+        }
+    }
+    console.log('[PASS] Weekly and ROS columns flag exactly the suggested pickups');
 
     console.log('\nALL SLEEPER TEST SUITE CHECKS PASSED! [OK]');
 }
