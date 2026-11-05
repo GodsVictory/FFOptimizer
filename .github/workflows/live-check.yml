@@ -1,0 +1,19 @@
+# Weekly check that the APIs FF Optimizer depends on still answer in the expected shape.
+# A failed run emails the repository owner. Source: the deploy/ folder on the local main branch.
+name: Live API check
+on:
+  schedule:
+    - cron: '0 15 * * 3' # Wednesdays 15:00 UTC, after weekly rankings are published
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .github/live-check.mjs
